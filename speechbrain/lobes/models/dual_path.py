@@ -578,7 +578,9 @@ class SBTransformerBlock(nn.Module):
         )
 
         if use_positional_encoding:
-            self.pos_enc = PositionalEncoding(input_size=d_model)
+            self.pos_enc = PositionalEncoding(
+                input_size=d_model, max_len=100000
+            )
 
     def forward(self, x):
         """Returns the transformed output.
@@ -953,6 +955,9 @@ class Dual_Computation_Block(nn.Module):
 
         intra = self.intra_mdl(intra)
 
+        # cutting the length incase the intra model changes things
+        intra = intra[:, :K, :]
+
         # [BS, K, N]
         if self.linear_layer_after_inter_intra:
             intra = self.intra_linear(intra)
@@ -973,6 +978,9 @@ class Dual_Computation_Block(nn.Module):
         inter = intra.permute(0, 2, 3, 1).contiguous().view(B * K, S, N)
         # [BK, S, H]
         inter = self.inter_mdl(inter)
+
+        # cutting the length incase the inter model changes things
+        inter = inter[:, :S, :]
 
         # [BK, S, N]
         if self.linear_layer_after_inter_intra:
@@ -1196,14 +1204,21 @@ class Dual_Path_Model(nn.Module):
                L = the number of time points
         """
         B, N, L = input.shape
-        P = K // 2
-        input, gap = self._padding(input, K)
-        # [B, N, K, S]
-        input1 = input[:, :, :-P].contiguous().view(B, N, -1, K)
-        input2 = input[:, :, P:].contiguous().view(B, N, -1, K)
-        input = (
-            torch.cat([input1, input2], dim=3).view(B, N, -1, K).transpose(2, 3)
-        )
+
+        if K >= L:
+            input = input.unsqueeze(-1)
+            gap = 0
+        else:
+            P = K // 2
+            input, gap = self._padding(input, K)
+            # [B, N, K, S]
+            input1 = input[:, :, :-P].contiguous().view(B, N, -1, K)
+            input2 = input[:, :, P:].contiguous().view(B, N, -1, K)
+            input = (
+                torch.cat([input1, input2], dim=3)
+                .view(B, N, -1, K)
+                .transpose(2, 3)
+            )
 
         return input.contiguous(), gap
 
@@ -1229,16 +1244,20 @@ class Dual_Path_Model(nn.Module):
 
         """
         B, N, K, S = input.shape
-        P = K // 2
-        # [B, N, S, K]
-        input = input.transpose(2, 3).contiguous().view(B, N, -1, K * 2)
 
-        input1 = input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
-        input2 = input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
-        input = input1 + input2
-        # [B, N, L]
-        if gap > 0:
-            input = input[:, :, :-gap]
+        if S == 1:
+            input = input.squeeze(-1)
+        else:
+            P = K // 2
+            # [B, N, S, K]
+            input = input.transpose(2, 3).contiguous().view(B, N, -1, K * 2)
+
+            input1 = input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
+            input2 = input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
+            input = input1 + input2
+            # [B, N, L]
+            if gap > 0:
+                input = input[:, :, :-gap]
 
         return input
 
@@ -1271,7 +1290,7 @@ class SepformerWrapper(nn.Module):
     masknet_extraskipconnection: bool,
         This introduces extra skip connections around the intra block
     masknet_numspks: int,
-        This determines the number of sepakers to estimate
+        This determines the number of speakers to estimate
     intra_numlayers: int,
         This determines the number of layers in the intra block
     inter_numlayers: int,

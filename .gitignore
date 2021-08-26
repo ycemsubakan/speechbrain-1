@@ -140,3 +140,13 @@ dmypy.json
 
 # Results folders
 **/results/
+
+# Mac OS
+.DS_Store
+
+# IntelliJ IDE idea folder
+.idea/
+
+# vim
+*.swp
+*.swo

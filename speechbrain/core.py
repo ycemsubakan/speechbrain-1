@@ -40,6 +40,8 @@ DEFAULT_LOG_CONFIG = os.path.join(DEFAULT_LOG_CONFIG, "log-config.yaml")
 torch._C._jit_set_profiling_executor(False)
 torch._C._jit_set_profiling_mode(False)
 INTRA_EPOCH_CKPT_FLAG = "brain_intra_epoch_ckpt"
+PYTHON_VERSION_MAJOR = 3
+PYTHON_VERSION_MINOR = 7
 
 
 def create_experiment_directory(
@@ -194,28 +196,29 @@ def parse_arguments(arg_list):
         help="The device to run the experiment on (e.g. 'cuda:0')",
     )
     parser.add_argument(
-        "--data_parallel_count",
-        type=int,
-        default=-1,
-        help="Number of devices that are used for data_parallel computation",
-    )
-    parser.add_argument(
         "--data_parallel_backend",
-        type=bool,
         default=False,
-        help="If True, data_parallel is used.",
+        action="store_true",
+        help="This flag enables training with data_parallel.",
     )
     parser.add_argument(
         "--distributed_launch",
-        type=bool,
         default=False,
-        help="if True, use DDP",
+        action="store_true",
+        help="This flag enables training with DDP. Assumes script run with "
+        "`torch.distributed.launch`",
     )
     parser.add_argument(
         "--distributed_backend",
         type=str,
         default="nccl",
         help="One of {nccl, gloo, mpi}",
+    )
+    parser.add_argument(
+        "--find_unused_parameters",
+        default=False,
+        action="store_true",
+        help="This flag disable unused parameters detection",
     )
     parser.add_argument(
         "--jit_module_keys",
@@ -225,8 +228,9 @@ def parse_arguments(arg_list):
     )
     parser.add_argument(
         "--auto_mix_prec",
-        type=bool,
-        help="If True, automatic mixed-precision is used.",
+        default=False,
+        action="store_true",
+        help="This flag enables training with automatic mixed-precision.",
     )
     parser.add_argument(
         "--max_grad_norm",
@@ -240,9 +244,10 @@ def parse_arguments(arg_list):
         help="Max number of batches per epoch to skip if loss is nonfinite.",
     )
     parser.add_argument(
-        "--progressbar",
-        type=bool,
-        help="If True, displays a progressbar indicating dataset progress.",
+        "--noprogressbar",
+        default=False,
+        action="store_true",
+        help="This flag disables the data loop progressbars.",
     )
     parser.add_argument(
         "--ckpt_interval_minutes",
@@ -264,17 +269,8 @@ def parse_arguments(arg_list):
 
     # Checking that DataParallel use the right number of GPU
     if run_opts["data_parallel_backend"]:
-        if run_opts["data_parallel_count"] == 0:
-            raise ValueError(
-                "data_parallel_count must be > 1."
-                "if data_parallel_count = -1, then use all gpus."
-            )
-        if run_opts["data_parallel_count"] > torch.cuda.device_count():
-            raise ValueError(
-                "data_parallel_count must be <= "
-                + str(torch.cuda.device_count())
-                + "if data_parallel_count = -1, then use all gpus."
-            )
+        if torch.cuda.device_count() == 0:
+            raise ValueError("You must have at least 1 GPU.")
 
     # For DDP, the device args must equal to local_rank used by
     # torch.distributed.launch. If run_opts["local_rank"] exists,
@@ -386,8 +382,8 @@ class Brain:
         nonfinite_patience (int)
             Number of times to ignore non-finite losses before stopping.
             Default: ``3``.
-        progressbar (bool)
-            Whether to display a progressbar when training. Default: ``True``.
+        noprogressbar (bool)
+            Whether to turn off progressbar when training. Default: ``False``.
         ckpt_interval_minutes (float)
             Amount of time between saving intra-epoch checkpoints,
             in minutes, default: ``15.0``. If non-positive, these are not saved.
@@ -425,15 +421,15 @@ class Brain:
             "debug_batches": 2,
             "debug_epochs": 2,
             "device": "cpu",
-            "data_parallel_count": -1,
             "data_parallel_backend": False,
             "distributed_launch": False,
             "distributed_backend": "nccl",
+            "find_unused_parameters": False,
             "jit_module_keys": None,
             "auto_mix_prec": False,
             "max_grad_norm": 5.0,
             "nonfinite_patience": 3,
-            "progressbar": True,
+            "noprogressbar": False,
             "ckpt_interval_minutes": 0,
         }
         for arg, default in run_opt_defaults.items():
@@ -454,11 +450,27 @@ class Brain:
                 else:
                     setattr(self, arg, default)
 
+        # Check Python version
+        if not (
+            sys.version_info.major == PYTHON_VERSION_MAJOR
+            and sys.version_info.minor >= PYTHON_VERSION_MINOR
+        ):
+            logger.warn(
+                "Detected Python "
+                + str(sys.version_info.major)
+                + "."
+                + str(sys.version_info.minor)
+                + ". We suggest using SpeechBrain with Python >="
+                + str(PYTHON_VERSION_MAJOR)
+                + "."
+                + str(PYTHON_VERSION_MINOR)
+            )
+
         if self.data_parallel_backend and self.distributed_launch:
             sys.exit(
                 "To use data_parallel backend, start your script with:\n\t"
                 "python experiment.py hyperparams.yaml "
-                "--data_parallel_backend=True --data_parallel_count=2"
+                "--data_parallel_backend=True"
                 "To use DDP backend, start your script with:\n\t"
                 "python -m torch.distributed.lunch [args]\n"
                 "experiment.py hyperparams.yaml --distributed_launch=True "
@@ -823,14 +835,15 @@ class Brain:
         """
         # Managing automatic mixed precision
         if self.auto_mix_prec:
+            self.optimizer.zero_grad()
             with torch.cuda.amp.autocast():
                 outputs = self.compute_forward(batch, Stage.TRAIN)
                 loss = self.compute_objectives(outputs, batch, Stage.TRAIN)
-                self.scaler.scale(loss).backward()
-                if self.check_gradients(loss):
-                    self.scaler.step(self.optimizer)
-                self.optimizer.zero_grad()
-                self.scaler.update()
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(self.optimizer)
+            if self.check_gradients(loss):
+                self.scaler.step(self.optimizer)
+            self.scaler.update()
         else:
             outputs = self.compute_forward(batch, Stage.TRAIN)
             loss = self.compute_objectives(outputs, batch, Stage.TRAIN)
@@ -976,7 +989,7 @@ class Brain:
         self.on_fit_start()
 
         if progressbar is None:
-            progressbar = self.progressbar
+            progressbar = not self.noprogressbar
 
         # Iterate epochs
         for epoch in epoch_counter:
@@ -1090,23 +1103,18 @@ class Brain:
         elif self.distributed_launch:
             for name, module in self.modules.items():
                 if any(p.requires_grad for p in module.parameters()):
-                    # for ddp, all module must run on same GPU
                     module = SyncBatchNorm.convert_sync_batchnorm(module)
-                    module = DDP(module, device_ids=[self.device])
+                    module = DDP(
+                        module,
+                        device_ids=[self.device],
+                        find_unused_parameters=self.find_unused_parameters,
+                    )
                     self.modules[name] = module
         else:
             # data_parallel_backend
             for name, module in self.modules.items():
                 if any(p.requires_grad for p in module.parameters()):
-                    # if distributed_count = -1 then use all gpus
-                    # otherwise, specify the set of gpu to use
-                    if self.data_parallel_count == -1:
-                        module = DP(module)
-                    else:
-                        module = DP(
-                            module,
-                            [i for i in range(self.data_parallel_count)],
-                        )
+                    module = DP(module)
                     self.modules[name] = module
 
     def evaluate(
@@ -1144,7 +1152,7 @@ class Brain:
         average test loss
         """
         if progressbar is None:
-            progressbar = self.progressbar
+            progressbar = not self.noprogressbar
 
         if not isinstance(test_set, DataLoader):
             test_loader_kwargs["ckpt_prefix"] = None
@@ -1189,8 +1197,8 @@ class Brain:
             The average loss.
         """
         if torch.isfinite(loss):
-            avg_loss -= avg_loss / (self.step + 1)
-            avg_loss += float(loss) / (self.step + 1)
+            avg_loss -= avg_loss / self.step
+            avg_loss += float(loss) / self.step
         return avg_loss
 
     @sb.utils.checkpoints.mark_as_saver
