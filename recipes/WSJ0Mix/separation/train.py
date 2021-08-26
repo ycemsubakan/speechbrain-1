@@ -68,14 +68,28 @@ class Separation(sb.Brain):
 
         # Separation
         mix_w = self.hparams.Encoder(mix)
-        est_mask = self.hparams.MaskNet(mix_w)
-        mix_w = torch.stack([mix_w] * self.hparams.num_spks)
-        sep_h = mix_w * est_mask
+
+        # PostEncoder is optional
+        post_encoder = getattr(self.hparams, "PostEncoder", None)
+        if post_encoder is not None:
+            mix_w_post_encoder = self.hparams.PostEncoder(mix_w)
+        else:
+            mix_w_post_encoder = mix_w
+        est_mask = self.hparams.MaskNet(mix_w_post_encoder)
+        mix_w_for_est = torch.stack([mix_w_post_encoder] * self.hparams.num_spks)
+        sep_h = mix_w_for_est * est_mask
+
+        # PostEncoder is optional
+        post_mask = getattr(self.hparams, "PostMask", None)
+        if post_mask is not None:
+            sep_h_post_mask = self.hparams.PostMask(mix_w, sep_h)
+        else:
+            sep_h_post_mask = sep_h
 
         # Decoding
         est_source = torch.cat(
             [
-                self.hparams.Decoder(sep_h[i]).unsqueeze(-1)
+                self.hparams.Decoder(sep_h_post_mask[i]).unsqueeze(-1)
                 for i in range(self.hparams.num_spks)
             ],
             dim=-1,
@@ -509,7 +523,6 @@ def dataio_prep(hparams):
 
 
 if __name__ == "__main__":
-
     # Load hyperparameters file with command-line overrides
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
     with open(hparams_file) as fin:
