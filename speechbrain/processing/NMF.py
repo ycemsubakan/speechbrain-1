@@ -8,26 +8,6 @@ from speechbrain.processing.features import spectral_magnitude
 import speechbrain.processing.features as spf
 
 
-def spectral_phase(stft, power=2, log=False):
-    """Returns the phase of a complex spectrogram.
-
-    Arguments
-    ---------
-    stft : torch.Tensor
-        A tensor, output from the stft function.
-
-    Example
-    -------
-    >>> BS, nfft, T = 10, 20, 300
-    >>> X_stft = torch.randn(BS, nfft//2 + 1, T, 2)
-    >>> phase_mix = spectral_phase(X_stft)
-    """
-
-    phase = torch.atan2(stft[:, :, :, 1], stft[:, :, :, 0])
-
-    return phase
-
-
 def NMF_separate_spectra(Whats, Xmix):
     """This function separates the mixture signals, given NMF template matrices.
 
@@ -146,7 +126,7 @@ def reconstruct_results(
         sample_rate=sample_rate, win_length=win_length, hop_length=hop_length
     )
 
-    phase_mix = spectral_phase(X_stft)
+    phase_mix = spf.spectral_phase(X_stft)
     mag_mix = spectral_magnitude(X_stft, power=2)
 
     x1hats, x2hats = [], []

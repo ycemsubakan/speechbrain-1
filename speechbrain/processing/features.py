@@ -37,6 +37,7 @@ import math
 import torch
 import logging
 from packaging import version
+
 from speechbrain.utils.checkpoints import (
     mark_as_saver,
     mark_as_loader,
@@ -322,6 +323,92 @@ class ISTFT(torch.nn.Module):
             istft = istft.transpose(1, 2)
 
         return istft
+
+
+class Sequence(torch.nn.Module):
+
+    def __init__(self, elements):
+        super().__init__()
+        self.elements = elements
+
+    def forward(self, x):
+        for element in self.elements:
+            x = element(x)
+        return x
+
+
+class Transposer(torch.nn.Module):
+
+    def __init__(self, dimension_order):
+        super().__init__()
+        self.dimension_order = dimension_order
+
+    def forward(self, x):
+        return x.permute(*self.dimension_order)
+
+
+class PhaseMultiplier(torch.nn.Module):
+
+    def __init__(self,):
+        super().__init__()
+
+    def forward(self, stft, stft_mask):
+        assert stft_mask.shape[0] == 2
+        mask1, mask2 = stft_mask
+        mag_mix = spectral_magnitude(stft, 0.5).permute(0, 2, 1)
+        phase_mix = spectral_phase(stft).permute(0, 2, 1)
+
+        x1hats, x2hats = [], []
+
+        for i in range(mask1.shape[0]):
+            mask1_by_mag = mask1[i] * mag_mix[i]
+            x1hat_stft = torch.stack([mask1_by_mag * torch.cos(phase_mix[i]),
+                                 mask1_by_mag *torch.sin(phase_mix[i])],
+                                dim=-1)
+
+            mask2_by_mag = mask1[i] * mag_mix[i]
+            x2hat_stft = torch.stack([mask2_by_mag * torch.cos(phase_mix[i]),
+                                      mask2_by_mag * torch.sin(phase_mix[i])],
+                                     dim=-1)
+
+            x1hats.append(x1hat_stft)
+            x2hats.append(x2hat_stft)
+
+        result_spk1 = torch.stack(x1hats, dim=0)
+        result_spk2 = torch.stack(x1hats, dim=0)
+        result = torch.stack([result_spk1, result_spk2])
+
+        return result.permute(0, 1, 3, 2, 4)
+
+
+class SpectralMagnitude(torch.nn.Module):
+
+    def __init__(self, power):
+        super().__init__()
+        self.power = power
+
+    def forward(self, stft):
+        return spectral_magnitude(stft, self.power)
+
+
+def spectral_phase(stft, power=2, log=False):
+    """Returns the phase of a complex spectrogram.
+
+    Arguments
+    ---------
+    stft : torch.Tensor
+        A tensor, output from the stft function.
+
+    Example
+    -------
+    >>> BS, nfft, T = 10, 20, 300
+    >>> X_stft = torch.randn(BS, nfft//2 + 1, T, 2)
+    >>> phase_mix = spectral_phase(X_stft)
+    """
+
+    phase = torch.atan2(stft[:, :, :, 1], stft[:, :, :, 0])
+
+    return phase
 
 
 def spectral_magnitude(stft, power=1, log=False, eps=1e-14):

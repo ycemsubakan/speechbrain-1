@@ -68,14 +68,28 @@ class Separation(sb.Brain):
 
         # Separation
         mix_w = self.hparams.Encoder(mix)
-        est_mask = self.hparams.MaskNet(mix_w)
-        mix_w = torch.stack([mix_w] * self.hparams.num_spks)
-        sep_h = mix_w * est_mask
+
+        # PostEncoder is optional
+        post_encoder = getattr(self.hparams, "PostEncoder", None)
+        if post_encoder is not None:
+            mix_w_post_encoder = self.hparams.PostEncoder(mix_w)
+        else:
+            mix_w_post_encoder = mix_w
+        est_mask = self.hparams.MaskNet(mix_w_post_encoder)
+        mix_w_for_est = torch.stack([mix_w_post_encoder] * self.hparams.num_spks)
+        sep_h = mix_w_for_est * est_mask
+
+        # PostEncoder is optional
+        post_mask = getattr(self.hparams, "PostMask", None)
+        if post_mask is not None:
+            sep_h_post_mask = self.hparams.PostMask(mix_w, sep_h)
+        else:
+            sep_h_post_mask = sep_h
 
         # Decoding
         est_source = torch.cat(
             [
-                self.hparams.Decoder(sep_h[i]).unsqueeze(-1)
+                self.hparams.Decoder(sep_h_post_mask[i]).unsqueeze(-1)
                 for i in range(self.hparams.num_spks)
             ],
             dim=-1,
@@ -88,7 +102,6 @@ class Separation(sb.Brain):
             est_source = F.pad(est_source, (0, 0, 0, T_origin - T_est))
         else:
             est_source = est_source[:, :T_origin, :]
-
         return est_source, targets
 
     def compute_objectives(self, predictions, targets):
@@ -194,8 +207,7 @@ class Separation(sb.Brain):
                     self.hparams.n_audio_to_save += -1
             else:
                 self.save_audio(snt_id[0], mixture, targets, predictions)
-
-        return loss.detach()
+        return torch.mean(loss).detach()
 
     def on_stage_end(self, stage, stage_loss, epoch):
         """Gets called at the end of a epoch."""
@@ -379,16 +391,16 @@ class Separation(sb.Brain):
                         "snt_id": snt_id[0],
                         "sdr": sdr.mean(),
                         "sdr_i": sdr_i,
-                        "si-snr": -sisnr.item(),
-                        "si-snr_i": -sisnr_i.item(),
+                        "si-snr": -sisnr.mean(),
+                        "si-snr_i": -sisnr_i.mean(),
                     }
                     writer.writerow(row)
 
                     # Metric Accumulation
                     all_sdrs.append(sdr.mean())
                     all_sdrs_i.append(sdr_i.mean())
-                    all_sisnrs.append(-sisnr.item())
-                    all_sisnrs_i.append(-sisnr_i.item())
+                    all_sisnrs.append(-sisnr.mean())
+                    all_sisnrs_i.append(-sisnr_i.mean())
 
                 row = {
                     "snt_id": "avg",
@@ -509,7 +521,6 @@ def dataio_prep(hparams):
 
 
 if __name__ == "__main__":
-
     # Load hyperparameters file with command-line overrides
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
     with open(hparams_file) as fin:
