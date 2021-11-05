@@ -16,7 +16,8 @@ import copy
 from speechbrain.nnet.linear import Linear
 from speechbrain.lobes.models.transformer.Transformer import TransformerEncoder
 from speechbrain.lobes.models.transformer.Transformer import PositionalEncoding
-from speechbrain.lobes.models.transformer.conformer import ConformerEncoder
+from speechbrain.lobes.models.transformer.Conformer import ConformerEncoder
+
 import speechbrain.nnet.RNN as SBRNN
 from speechbrain.nnet.activations import Swish
 
@@ -553,6 +554,7 @@ class SBTransformerBlock(nn.Module):
         activation="relu",
         use_positional_encoding=False,
         norm_before=False,
+        attention_type="regularMHA",
     ):
         super(SBTransformerBlock, self).__init__()
         self.use_positional_encoding = use_positional_encoding
@@ -575,6 +577,7 @@ class SBTransformerBlock(nn.Module):
             dropout=dropout,
             activation=activation,
             normalize_before=norm_before,
+            attention_type=attention_type,
         )
 
         if use_positional_encoding:
@@ -672,7 +675,6 @@ class SBConformerEncoderBlock(nn.Module):
             num_layers=num_layers,
             nhead=nhead,
             d_ffn=d_ffn,
-            input_shape=input_shape,
             d_model=d_model,
             kdim=kdim,
             vdim=vdim,
@@ -698,8 +700,9 @@ class SBConformerEncoderBlock(nn.Module):
 
         """
         if self.use_positional_encoding:
+            import pdb; pdb.set_trace()
             pos_enc = self.pos_enc(x)
-            return self.mdl(x + pos_enc)[0]
+            return self.mdl(x, pos_embs = pos_enc)[0]
         else:
             return self.mdl(x)[0]
 

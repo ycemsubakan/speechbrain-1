@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from speechbrain.lobes.models.transformer.Transformer import PositionalEncoding
-from speechbrain.lobes.models.transformer.conformer import ConformerEncoder
+from speechbrain.lobes.models.transformer.Conformer import ConformerEncoder
 import speechbrain.nnet.RNN as SBRNN
 from speechbrain.nnet.activations import Swish
 from speechbrain.lobes.models.transformer.Longformer import LongformerEncoder
