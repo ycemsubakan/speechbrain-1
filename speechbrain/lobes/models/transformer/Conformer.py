@@ -90,8 +90,10 @@ class ConvolutionModule(nn.Module):
             bias=bias,
         )
 
+        self.afterconvln = nn.LayerNorm(input_size)
         self.after_conv = nn.Sequential(
-            nn.BatchNorm1d(input_size),
+            # nn.LayerNorm(input_size),
+            # nn.BatchNorm1d(input_size),
             activation(),
             # pointwise
             nn.Conv1d(
@@ -109,6 +111,8 @@ class ConvolutionModule(nn.Module):
         if self.causal:
             # chomp
             out = out[..., : -self.padding]
+        out = out.permute(0, 2, 1)
+        out = self.afterconvln(out).permute(0, 2, 1)
         out = self.after_conv(out)
         out = out.transpose(1, 2)
         return out
@@ -241,7 +245,6 @@ class ConformerEncoderLayer(nn.Module):
         # muti-head attention module
         skip = x
         x = self.norm1(x)
-        import pdb; pdb.set_trace()
         x, self_attn = self.mha_layer(
             x,
             x,

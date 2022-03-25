@@ -685,7 +685,7 @@ class SBConformerEncoderBlock(nn.Module):
         )
 
         if use_positional_encoding:
-            self.pos_enc = PositionalEncoding(input_size=d_model)
+            self.pos_enc = PositionalEncoding(input_size=d_model, max_len=10000)
 
     def forward(self, x):
         """Returns the transformed output.
@@ -700,9 +700,12 @@ class SBConformerEncoderBlock(nn.Module):
 
         """
         if self.use_positional_encoding:
-            import pdb; pdb.set_trace()
-            pos_enc = self.pos_enc(x)
-            return self.mdl(x, pos_embs = pos_enc)[0]
+            pos_enc = self.pos_enc(
+                torch.ones(x.shape[0], -1 + x.shape[1] * 2, x.shape[2]).to(
+                    "cuda"
+                )
+            )
+            return self.mdl(x, pos_embs=pos_enc)[0]
         else:
             return self.mdl(x)[0]
 
@@ -1048,6 +1051,8 @@ class Dual_Path_Model(nn.Module):
         out_channels,
         intra_model,
         inter_model,
+        intra_model_prl=None,
+        inter_model_prl=None,
         num_layers=1,
         norm="ln",
         K=200,
@@ -1056,6 +1061,9 @@ class Dual_Path_Model(nn.Module):
         linear_layer_after_inter_intra=True,
         use_global_pos_enc=False,
         max_length=20000,
+        parallel_arm=False,
+        parallel_K=200,
+        parallel_wire_in=False,
     ):
         super(Dual_Path_Model, self).__init__()
         self.K = K
@@ -1082,6 +1090,25 @@ class Dual_Path_Model(nn.Module):
                     )
                 )
             )
+
+        self.parallel_arm = parallel_arm
+        self.parallel_K = parallel_K
+        self.parallel_wire_in = parallel_wire_in
+        if parallel_arm:
+            self.dual_mdl_prl = nn.ModuleList([])
+            for i in range(num_layers):
+                self.dual_mdl_prl.append(
+                    copy.deepcopy(
+                        Dual_Computation_Block(
+                            intra_model_prl,
+                            inter_model_prl,
+                            out_channels,
+                            norm,
+                            skip_around_intra=skip_around_intra,
+                            linear_layer_after_inter_intra=linear_layer_after_inter_intra,
+                        )
+                    )
+                )
 
         self.conv2d = nn.Conv2d(
             out_channels, out_channels * num_spks, kernel_size=1
@@ -1127,6 +1154,28 @@ class Dual_Path_Model(nn.Module):
                 x.size(1) ** 0.5
             )
 
+        if self.parallel_arm:
+            # [B, N, K, S]
+            x_par, gap_par = self._Segmentation(x, self.parallel_K)
+
+            # [B, N, K, S]
+            for i in range(self.num_layers):
+                x_par = self.dual_mdl_prl[i](x_par)
+            x_par = self.prelu(x_par)
+
+            # [B, N*spks, K, S]
+            x_par = self.conv2d(x_par)
+            B, _, K, S = x_par.shape
+
+            # [B*spks, N, K, S]
+            x_par = x_par.view(B * self.num_spks, -1, K, S)
+
+            # [B*spks, N, L]
+            x_par = self._over_add(x_par, gap_par)
+
+            if self.parallel_wire_in:
+                x = x_par
+
         # [B, N, K, S]
         x, gap = self._Segmentation(x, self.K)
 
@@ -1144,6 +1193,10 @@ class Dual_Path_Model(nn.Module):
 
         # [B*spks, N, L]
         x = self._over_add(x, gap)
+
+        if self.parallel_arm and (not self.parallel_wire_in):
+            x = x + x_par
+
         x = self.output(x) * self.output_gate(x)
 
         # [B*spks, N, L]

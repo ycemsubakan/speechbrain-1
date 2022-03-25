@@ -35,6 +35,7 @@ import numpy as np
 from tqdm import tqdm
 import csv
 import logging
+import torch.nn as nn
 
 
 # Define training procedure
@@ -508,6 +509,41 @@ def dataio_prep(hparams):
     return train_data, valid_data, test_data
 
 
+class whole_model(nn.Module):
+    def __init__(self, hparams):
+        super(whole_model, self).__init__()
+        self.hparams = hparams
+        self.encoder = hparams["Encoder"]
+        self.masknet = hparams["MaskNet"]
+        self.decoder = hparams["Decoder"]
+
+    def forward(self, mix):
+        with torch.no_grad():
+            mix_w = self.encoder(mix)
+            est_mask = self.masknet(mix_w)
+            mix_w = torch.stack([mix_w] * self.hparams["num_spks"])
+            sep_h = mix_w * est_mask
+
+            # Decoding
+            est_source = torch.cat(
+                [
+                    self.decoder(sep_h[i]).unsqueeze(-1)
+                    for i in range(self.hparams["num_spks"])
+                ],
+                dim=-1,
+            )
+
+            # T changed after conv1d in encoder, fix it here
+            T_origin = mix.size(1)
+            T_est = est_source.size(1)
+            if T_origin > T_est:
+                est_source = F.pad(est_source, (0, 0, 0, T_origin - T_est))
+            else:
+                est_source = est_source[:, :T_origin, :]
+
+        return est_source
+
+
 if __name__ == "__main__":
 
     # Load hyperparameters file with command-line overrides
@@ -610,10 +646,84 @@ if __name__ == "__main__":
         checkpointer=hparams["checkpointer"],
     )
 
+    # macs, params = profile(fp_model, inputs=(torch.randn(1, 1000).to('cuda'), ))
     # re-initialize the parameters if we don't use a pretrained model
     if "pretrained_separator" not in hparams:
         for module in separator.modules.values():
             separator.reset_layer_recursively(module)
+
+    # if 0:
+    #     fp_model = whole_model(hparams)
+    #     from torchinfo import summary
+    #     import pickle
+
+    #     # from thop import profile
+
+    #     asd = summary(fp_model, input_size=(1, 64000))
+    #     print(
+    #         "memory {}".format(
+    #             torch.cuda.max_memory_allocated("cuda") / 10 ** 9
+    #         )
+    #     )
+
+    #     fp_model = fp_model.to("cpu")
+    #     if not os.path.exists("model_stats"):
+    #         os.mkdir("model_stats")
+
+    #     mem_results = []
+    #     time_results = []
+    #     for sec in [1, 2, 4, 8]:
+    #         inputs = torch.rand(1, 8000 * sec)
+    #         from torch.profiler import (
+    #             profile,
+    #             record_function,
+    #             ProfilerActivity,
+    #         )
+    #         import re
+
+    #         with profile(
+    #             activities=[ProfilerActivity.CPU],
+    #             profile_memory=True,
+    #             record_shapes=True,
+    #         ) as prof:
+    #             fp_model(inputs)
+
+    #         mem_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
+    #             -204:-190
+    #         ]
+    #         time_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
+    #             -8:
+    #         ]
+
+    #         mem_result = re.findall("\d+\.\d+", mem_info)[0]
+    #         time_result = re.findall("\d+\.\d+", time_info)[0]
+
+    #         mem_float = (
+    #             float(mem_result) / 1000
+    #             if "Mb" in mem_info
+    #             else float(mem_result)
+    #         )
+    #         time_float = (
+    #             float(time_result) / 1000
+    #             if "ms" in time_info
+    #             else float(time_result)
+    #         )
+
+    #         mem_results.append(mem_float)
+    #         time_results.append(time_float)
+
+    #     results = {"time": time_results, "memory": mem_results}
+
+    #     pickle.dump(
+    #         results,
+    #         open(
+    #             "model_stats/" + hparams["experiment_name"] + "memory_.pkl",
+    #             "wb",
+    #         ),
+    #     )
+    #     import pdb
+
+    #     pdb.set_trace()
 
     if not hparams["test_only"]:
         # Training

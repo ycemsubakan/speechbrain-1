@@ -592,7 +592,6 @@ class RelPosMHAXL(nn.Module):
                 1, 1, self.num_heads, self.vhead_dim
             )
 
-        import pdb; pdb.set_trace()
         p_k = self.linear_pos(pos_embs).view(
             1, -1, self.num_heads, self.head_dim
         )
