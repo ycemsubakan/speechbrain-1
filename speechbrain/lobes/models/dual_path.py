@@ -15,7 +15,10 @@ import torch.nn.functional as F
 import copy
 from speechbrain.nnet.linear import Linear
 from speechbrain.lobes.models.transformer.Transformer import TransformerEncoder
-from speechbrain.lobes.models.transformer.Transformer import PositionalEncoding
+from speechbrain.lobes.models.transformer.Transformer import (
+    PositionalEncoding,
+    get_lookahead_mask,
+)
 from speechbrain.lobes.models.transformer.Conformer import ConformerEncoder
 
 import speechbrain.nnet.RNN as SBRNN
@@ -555,6 +558,7 @@ class SBTransformerBlock(nn.Module):
         use_positional_encoding=False,
         norm_before=False,
         attention_type="regularMHA",
+        causal=False,
     ):
         super(SBTransformerBlock, self).__init__()
         self.use_positional_encoding = use_positional_encoding
@@ -565,6 +569,8 @@ class SBTransformerBlock(nn.Module):
             activation = nn.GELU
         else:
             raise ValueError("unknown activation")
+
+        self.causal = causal
 
         self.mdl = TransformerEncoder(
             num_layers=num_layers,
@@ -577,6 +583,7 @@ class SBTransformerBlock(nn.Module):
             dropout=dropout,
             activation=activation,
             normalize_before=norm_before,
+            causal=causal,
             attention_type=attention_type,
         )
 
@@ -597,11 +604,13 @@ class SBTransformerBlock(nn.Module):
                    N = number of filters
 
         """
+        src_mask = get_lookahead_mask(x) if self.causal else None
+
         if self.use_positional_encoding:
             pos_enc = self.pos_enc(x)
-            return self.mdl(x + pos_enc)[0]
+            return self.mdl(x + pos_enc, src_mask=src_mask)[0]
         else:
-            return self.mdl(x)[0]
+            return self.mdl(x, src_mask=src_mask)[0]
 
 
 class SBConformerEncoderBlock(nn.Module):
