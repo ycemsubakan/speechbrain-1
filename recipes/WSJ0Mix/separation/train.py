@@ -651,7 +651,7 @@ if __name__ == "__main__":
         for module in separator.modules.values():
             separator.reset_layer_recursively(module)
 
-    # if 0:
+    # if 1:
     #     fp_model = whole_model(hparams)
     #     from torchinfo import summary
     #     import pickle
@@ -672,6 +672,7 @@ if __name__ == "__main__":
     #     mem_results = []
     #     time_results = []
     #     for sec in [1, 2, 4, 8]:
+    #         print("trying {} sec long input".format(sec))
     #         inputs = torch.rand(1, 8000 * sec)
     #         from torch.profiler import (
     #             profile,
@@ -724,6 +725,9 @@ if __name__ == "__main__":
 
     #     pdb.set_trace()
 
+    dataloader_opts_valid = hparams.get(
+        "dataloader_opts_valid", hparams["dataloader_opts"]
+    )
     if not hparams["test_only"]:
         # Training
         separator.fit(
@@ -731,7 +735,7 @@ if __name__ == "__main__":
             train_data,
             valid_data,
             train_loader_kwargs=hparams["dataloader_opts"],
-            valid_loader_kwargs=hparams["dataloader_opts"],
+            valid_loader_kwargs=dataloader_opts_valid,
         )
 
     # Eval
