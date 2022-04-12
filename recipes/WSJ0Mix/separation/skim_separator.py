@@ -22,6 +22,7 @@ import torch.nn as nn
 from speechbrain.lobes.models.transformer.Transformer import (
     TransformerEncoder,
     PositionalEncoding,
+    get_lookahead_mask
 )
 
 from espnet2.enh.layers.dprnn import merge_feature
@@ -574,6 +575,8 @@ class SkiM_general(nn.Module):
         seg_overlap=False,
         seg_model=None,
         mem_model=None,
+        mem_attmodel=None,
+        use_dummy_timep=False
     ):
         super().__init__()
         self.input_size = input_size
@@ -603,6 +606,14 @@ class SkiM_general(nn.Module):
             self.mem_model = nn.ModuleList([])
             for i in range(num_blocks - 1):
                 self.mem_model.append(copy.deepcopy(mem_model))
+
+        self.mem_attmodel = mem_attmodel
+        if self.mem_attmodel is not None:
+            self.mem_attmodel = nn.ModuleList([])
+            for i in range(num_blocks - 1):
+                self.mem_attmodel.append(copy.deepcopy(mem_attmodel))
+        self.use_dummy_timep = use_dummy_timep
+
         self.output_fc = nn.Sequential(
             nn.PReLU(), nn.Conv1d(input_size, output_size, 1)
         )
@@ -628,11 +639,30 @@ class SkiM_general(nn.Module):
         hc = torch.zeros(
             output.shape[0], 1, output.shape[-1], device=output.device
         )
+        if self.use_dummy_timep:
+            output = torch.cat([output, 
+                                torch.ones(output.shape[0], 1, output.shape[-1], device=output.device)
+                                ], dim=1)
 
         for i in range(self.num_blocks):
+            #if self.mem_attmodel:
+            #    if i < (self.num_blocks - 1):
+            #        att = self.mem_attmodel[i](output + hc)
+
             output = self.seg_model[i](output + hc)  # BS, K, D
             if self.mem_type and i < self.num_blocks - 1:
-                hc = output.mean(1).unsqueeze(0)
+
+                #import pdb; pdb.set_trace()
+                if self.use_dummy_timep:
+                    hc = output[:, -1, :].unsqueeze(0)
+                    output = output[:, :-1, :]
+                else:
+                    if self.mem_attmodel:
+                        att = self.mem_attmodel[i](output) 
+                        hc = att.mean(1).unsqueeze(0)
+                    else:
+                        hc = output.mean(1).unsqueeze(0)
+
                 hc = self.mem_model[i](hc).permute(1, 0, 2)
 
         if self.seg_overlap:
@@ -808,6 +838,8 @@ class SkiMSeparator_General(AbsSeparator):
         seg_overlap: bool = False,
         seg_model=None,
         mem_model=None,
+        mem_attmodel=None,
+        use_dummy_timep=False
     ):
 
         super().__init__()
@@ -832,6 +864,8 @@ class SkiMSeparator_General(AbsSeparator):
             mem_type=mem_type,
             seg_model=seg_model,
             mem_model=mem_model,
+            mem_attmodel=mem_attmodel,
+            use_dummy_timep=use_dummy_timep
         )
 
         if nonlinear not in ("sigmoid", "relu", "tanh"):

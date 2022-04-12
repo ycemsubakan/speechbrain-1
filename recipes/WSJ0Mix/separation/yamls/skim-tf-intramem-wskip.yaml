@@ -21,7 +21,7 @@ data_folder: !PLACEHOLDER
 # you can do this conversion with the script ../meta/preprocess_dynamic_mixing.py
 base_folder_dm: /yourpath/wsj0-processed/si_tr_s/
 
-experiment_name: skim-tf-intramem-v3
+experiment_name: skim-tf-intramem-wskip
 output_folder: !ref results/<experiment_name>/<seed>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
@@ -125,7 +125,7 @@ chunk_size: 200
 MaskNet: !new:recipes.WSJ0Mix.separation.skim_separator.SkiMSeparator_General
     input_dim: !ref <N_encoder_out>
     num_spk: 2
-    causal: False
+    causal: True
     unit: 256
     segment_size: 150
     layer: 2
