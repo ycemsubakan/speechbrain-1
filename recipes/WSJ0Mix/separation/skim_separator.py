@@ -22,7 +22,7 @@ import torch.nn as nn
 from speechbrain.lobes.models.transformer.Transformer import (
     TransformerEncoder,
     PositionalEncoding,
-    get_lookahead_mask
+    get_lookahead_mask,
 )
 
 from espnet2.enh.layers.dprnn import merge_feature
@@ -576,7 +576,7 @@ class SkiM_general(nn.Module):
         seg_model=None,
         mem_model=None,
         mem_attmodel=None,
-        use_dummy_timep=False
+        use_dummy_timep=False,
     ):
         super().__init__()
         self.input_size = input_size
@@ -640,25 +640,34 @@ class SkiM_general(nn.Module):
             output.shape[0], 1, output.shape[-1], device=output.device
         )
         if self.use_dummy_timep:
-            output = torch.cat([output, 
-                                torch.ones(output.shape[0], 1, output.shape[-1], device=output.device)
-                                ], dim=1)
+            output = torch.cat(
+                [
+                    output,
+                    torch.ones(
+                        output.shape[0],
+                        1,
+                        output.shape[-1],
+                        device=output.device,
+                    ),
+                ],
+                dim=1,
+            )
 
         for i in range(self.num_blocks):
-            #if self.mem_attmodel:
+            # if self.mem_attmodel:
             #    if i < (self.num_blocks - 1):
             #        att = self.mem_attmodel[i](output + hc)
 
             output = self.seg_model[i](output + hc)  # BS, K, D
             if self.mem_type and i < self.num_blocks - 1:
 
-                #import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
                 if self.use_dummy_timep:
                     hc = output[:, -1, :].unsqueeze(0)
                     output = output[:, :-1, :]
                 else:
                     if self.mem_attmodel:
-                        att = self.mem_attmodel[i](output) 
+                        att = self.mem_attmodel[i](output)
                         hc = att.mean(1).unsqueeze(0)
                     else:
                         hc = output.mean(1).unsqueeze(0)
@@ -671,7 +680,8 @@ class SkiM_general(nn.Module):
             output = self.output_fc(output).transpose(1, 2)
 
         else:
-            output = output.view(B, S * K, D)[:, :T, :]  # B, T, D
+            #output = output.view(B, S * K, D)[:, :T, :]  # B, T, D
+            output = output.reshape(B, S * K, D)[:, :T, :]  # B, T, D
             output = self.output_fc(output.transpose(1, 2)).transpose(1, 2)
 
         return output
@@ -839,7 +849,7 @@ class SkiMSeparator_General(AbsSeparator):
         seg_model=None,
         mem_model=None,
         mem_attmodel=None,
-        use_dummy_timep=False
+        use_dummy_timep=False,
     ):
 
         super().__init__()
@@ -865,7 +875,7 @@ class SkiMSeparator_General(AbsSeparator):
             seg_model=seg_model,
             mem_model=mem_model,
             mem_attmodel=mem_attmodel,
-            use_dummy_timep=use_dummy_timep
+            use_dummy_timep=use_dummy_timep,
         )
 
         if nonlinear not in ("sigmoid", "relu", "tanh"):

@@ -751,6 +751,7 @@ class SBRNNBlock(nn.Module):
         input_size,
         hidden_channels,
         num_layers,
+        outsize,
         rnn_type="LSTM",
         dropout=0,
         bidirectional=True,
@@ -764,6 +765,8 @@ class SBRNNBlock(nn.Module):
             dropout=dropout,
             bidirectional=bidirectional,
         )
+        rnn_outsize = 2*hidden_channels if bidirectional else hidden_channels
+        self.out = nn.Linear(rnn_outsize, outsize)
 
     def forward(self, x):
         """Returns the transformed output.
@@ -777,7 +780,9 @@ class SBRNNBlock(nn.Module):
                    L = time points
         """
 
-        return self.mdl(x)[0]
+        rnn_out = self.mdl(x)[0]
+        out = self.out(rnn_out)
+        return out
 
 
 class DPTNetBlock(nn.Module):

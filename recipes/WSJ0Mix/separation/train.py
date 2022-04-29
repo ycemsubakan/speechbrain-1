@@ -651,7 +651,7 @@ if __name__ == "__main__":
         for module in separator.modules.values():
             separator.reset_layer_recursively(module)
 
-    #if 0:
+    # if 0:
     #    fp_model = whole_model(hparams)
     #    from torchinfo import summary
     #    import pickle
@@ -715,8 +715,8 @@ if __name__ == "__main__":
 
     #        macs, params = thop_profile(fp_model, inputs=(inputs,),
     #                                    custom_ops={} )
-    #        
-    #        macs2, params2 = get_model_complexity_info(fp_model, (inputs.shape[1], ), as_strings=True, print_per_layer_stat=True, verbose=True) 
+    #
+    #        macs2, params2 = get_model_complexity_info(fp_model, (inputs.shape[1], ), as_strings=True, print_per_layer_stat=True, verbose=True)
 
     #        import pdb; pdb.set_trace()
 
