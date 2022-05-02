@@ -12,6 +12,7 @@ from espnet2.enh.layers.complex_utils import is_complex
 from espnet2.enh.separator.abs_separator import AbsSeparator
 
 
+
 # An implementation of SkiM model described in
 # "SkiM: Skipping Memory LSTM for Low-Latency Real-Time Continuous Speech Separation"
 # (https://arxiv.org/abs/2201.10800)
@@ -415,6 +416,147 @@ class SBTransformerBlock_wnormandskip(nn.Module):
         return out
 
 
+class SBTransformerBlock_wrnnbefore(nn.Module):
+    """A wrapper for the SpeechBrain implementation of the transformer encoder.
+
+    Arguments
+    ---------
+    num_layers : int
+        Number of layers.
+    d_model : int
+        Dimensionality of the representation.
+    nhead : int
+        Number of attention heads.
+    d_ffn : int
+        Dimensionality of positional feed forward.
+    input_shape : tuple
+        Shape of input.
+    kdim : int
+        Dimension of the key (Optional).
+    vdim : int
+        Dimension of the value (Optional).
+    dropout : float
+        Dropout rate.
+    activation : str
+        Activation function.
+    use_positional_encoding : bool
+        If true we use a positional encoding.
+    norm_before: bool
+        Use normalization before transformations.
+
+    Example
+    ---------
+    >>> x = torch.randn(10, 100, 64)
+    >>> block = SBTransformerBlock(1, 64, 8)
+    >>> x = block(x)
+    >>> x.shape
+    torch.Size([10, 100, 64])
+    """
+
+    def __init__(
+        self,
+        num_layers,
+        d_model,
+        nhead,
+        rnn_num_layers,
+        rnn_hidden_size,
+        rnn_bidirectional,
+        d_ffn=2048,
+        input_shape=None,
+        kdim=None,
+        vdim=None,
+        dropout=0.1,
+        activation="relu",
+        use_positional_encoding=False,
+        norm_before=False,
+        attention_type="regularMHA",
+        causal=False,
+        use_norm=True,
+        use_skip=True,
+        norm_type="cLN",
+    ):
+        super(SBTransformerBlock_wrnnbefore, self).__init__()
+        self.use_positional_encoding = use_positional_encoding
+
+        if activation == "relu":
+            activation = nn.ReLU
+        elif activation == "gelu":
+            activation = nn.GELU
+        else:
+            raise ValueError("unknown activation")
+
+        self.causal = causal
+
+        self.mdl = TransformerEncoder(
+            num_layers=num_layers,
+            nhead=nhead,
+            d_ffn=d_ffn,
+            input_shape=input_shape,
+            d_model=d_model,
+            kdim=kdim,
+            vdim=vdim,
+            dropout=dropout,
+            activation=activation,
+            normalize_before=norm_before,
+            causal=causal,
+            attention_type=attention_type,
+        )
+
+        self.rnn = nn.LSTM(
+            d_model,
+            rnn_hidden_size,
+            rnn_num_layers,
+            batch_first=True,
+            bidirectional=rnn_bidirectional,
+        )
+        self.out = nn.Linear(2*rnn_hidden_size, d_model) if rnn_bidirectional else nn.Linear(rnn_hidden_size, d_model)
+
+        self.use_norm = use_norm
+        self.use_skip = use_skip
+
+        self.rnn_norm = choose_norm(
+                norm_type=norm_type, channel_size=d_model, shape="BTD"
+            )
+
+        if use_norm:
+            self.norm = choose_norm(
+                norm_type=norm_type, channel_size=d_model, shape="BTD"
+            )
+
+        if use_positional_encoding:
+            self.pos_enc = PositionalEncoding(
+                input_size=d_model, max_len=100000
+            )
+
+    def forward(self, x):
+        """Returns the transformed output.
+
+        Arguments
+        ---------
+        x : torch.Tensor
+            Tensor shape [B, L, N],
+            where, B = Batchsize,
+                   L = time points
+                   N = number of filters
+
+        """
+        src_mask = get_lookahead_mask(x) if self.causal else None
+
+        rnn_out = self.rnn(x)[0]
+        lin_out = self.out(rnn_out)
+        lin_out = x + self.rnn_norm(lin_out)
+
+        out = self.mdl(lin_out, src_mask=src_mask)[0]
+
+        if self.use_norm:
+            out = self.norm(out)
+        if self.use_skip:
+            out = out + x
+
+        return out
+
+
+
 class SkiM(nn.Module):
     """Skipping Memory Net
     args:
@@ -661,7 +803,6 @@ class SkiM_general(nn.Module):
             output = self.seg_model[i](output + hc)  # BS, K, D
             if self.mem_type and i < self.num_blocks - 1:
 
-                # import pdb; pdb.set_trace()
                 if self.use_dummy_timep:
                     hc = output[:, -1, :].unsqueeze(0)
                     output = output[:, :-1, :]
@@ -935,3 +1076,5 @@ class SkiMSeparator_General(AbsSeparator):
     @property
     def num_spk(self):
         return self._num_spk
+
+
