@@ -719,9 +719,6 @@ class SBConformerEncoderBlock(nn.Module):
             return self.mdl(x)[0]
 
 
-
-
-
 class SBRNNBlock(nn.Module):
     """RNNBlock for the dual path pipeline.
 
@@ -768,7 +765,7 @@ class SBRNNBlock(nn.Module):
             dropout=dropout,
             bidirectional=bidirectional,
         )
-        rnn_outsize = 2*hidden_channels if bidirectional else hidden_channels
+        rnn_outsize = 2 * hidden_channels if bidirectional else hidden_channels
         self.out = nn.Linear(rnn_outsize, outsize)
 
     def forward(self, x):
@@ -1081,6 +1078,7 @@ class Dual_Path_Model(nn.Module):
         parallel_arm=False,
         parallel_K=200,
         parallel_wire_in=False,
+        zero_overlap=False
     ):
         super(Dual_Path_Model, self).__init__()
         self.K = K
@@ -1111,6 +1109,7 @@ class Dual_Path_Model(nn.Module):
         self.parallel_arm = parallel_arm
         self.parallel_K = parallel_K
         self.parallel_wire_in = parallel_wire_in
+        self.zero_overlap = zero_overlap
         if parallel_arm:
             self.dual_mdl_prl = nn.ModuleList([])
             for i in range(num_layers):
@@ -1278,20 +1277,24 @@ class Dual_Path_Model(nn.Module):
         """
         B, N, L = input.shape
 
-        if K >= L:
-            input = input.unsqueeze(-1)
-            gap = 0
+        if self.zero_overlap:
+            input, gap = self._padfeature(input=input)
+            input = input.view(B, N, self.K, -1)  # B, S, K, D
         else:
-            P = K // 2
-            input, gap = self._padding(input, K)
-            # [B, N, K, S]
-            input1 = input[:, :, :-P].contiguous().view(B, N, -1, K)
-            input2 = input[:, :, P:].contiguous().view(B, N, -1, K)
-            input = (
-                torch.cat([input1, input2], dim=3)
-                .view(B, N, -1, K)
-                .transpose(2, 3)
-            )
+            if K >= L:
+                input = input.unsqueeze(-1)
+                gap = 0
+            else:
+                P = K // 2
+                input, gap = self._padding(input, K)
+                # [B, N, K, S]
+                input1 = input[:, :, :-P].contiguous().view(B, N, -1, K)
+                input2 = input[:, :, P:].contiguous().view(B, N, -1, K)
+                input = (
+                    torch.cat([input1, input2], dim=3)
+                    .view(B, N, -1, K)
+                    .transpose(2, 3)
+                )
 
         return input.contiguous(), gap
 
@@ -1318,21 +1321,34 @@ class Dual_Path_Model(nn.Module):
         """
         B, N, K, S = input.shape
 
-        if S == 1:
-            input = input.squeeze(-1)
+        if self.zero_overlap:
+            input = input.reshape(B, -1, S * K)  # B, T, D
+            input = input[:, :, :-gap]
         else:
-            P = K // 2
-            # [B, N, S, K]
-            input = input.transpose(2, 3).contiguous().view(B, N, -1, K * 2)
+            if S == 1:
+                input = input.squeeze(-1)
+            else:
+                P = K // 2
+                # [B, N, S, K]
+                input = input.transpose(2, 3).contiguous().view(B, N, -1, K * 2)
 
-            input1 = input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
-            input2 = input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
-            input = input1 + input2
-            # [B, N, L]
-            if gap > 0:
-                input = input[:, :, :-gap]
+                input1 = input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
+                input2 = input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
+                input = input1 + input2
+                # [B, N, L]
+                if gap > 0:
+                    input = input[:, :, :-gap]
 
         return input
+
+    def _padfeature(self, input):
+        B, D, T = input.shape
+        rest = self.K - T % self.K
+
+        if rest > 0:
+            input = torch.nn.functional.pad(input, (0, rest))
+        return input, rest
+
 
 
 class SepformerWrapper(nn.Module):

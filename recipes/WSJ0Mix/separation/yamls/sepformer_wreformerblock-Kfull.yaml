@@ -29,6 +29,7 @@ train_data: !ref <save_folder>/wsj_tr.csv
 valid_data: !ref <save_folder>/wsj_cv.csv
 test_data: !ref <save_folder>/wsj_tt.csv
 skip_prep: False
+get_rstats: True
 
 
 # Experiment params

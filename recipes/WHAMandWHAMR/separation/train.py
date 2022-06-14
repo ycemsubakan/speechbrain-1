@@ -560,7 +560,7 @@ if __name__ == "__main__":
         prepare_wham_whamr_csv,
         kwargs={
             "datapath": hparams["data_folder"],
-            "savepath": hparams["save_folder"],
+            "savepath": hparams.get("csv_folder", hparams["save_folder"]),
             "skip_prep": hparams["skip_prep"],
             "fs": hparams["sample_rate"],
         },

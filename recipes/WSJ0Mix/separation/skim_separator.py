@@ -12,7 +12,6 @@ from espnet2.enh.layers.complex_utils import is_complex
 from espnet2.enh.separator.abs_separator import AbsSeparator
 
 
-
 # An implementation of SkiM model described in
 # "SkiM: Skipping Memory LSTM for Low-Latency Real-Time Continuous Speech Separation"
 # (https://arxiv.org/abs/2201.10800)
@@ -509,14 +508,18 @@ class SBTransformerBlock_wrnnbefore(nn.Module):
             batch_first=True,
             bidirectional=rnn_bidirectional,
         )
-        self.out = nn.Linear(2*rnn_hidden_size, d_model) if rnn_bidirectional else nn.Linear(rnn_hidden_size, d_model)
+        self.out = (
+            nn.Linear(2 * rnn_hidden_size, d_model)
+            if rnn_bidirectional
+            else nn.Linear(rnn_hidden_size, d_model)
+        )
 
         self.use_norm = use_norm
         self.use_skip = use_skip
 
         self.rnn_norm = choose_norm(
-                norm_type=norm_type, channel_size=d_model, shape="BTD"
-            )
+            norm_type=norm_type, channel_size=d_model, shape="BTD"
+        )
 
         if use_norm:
             self.norm = choose_norm(
@@ -554,7 +557,6 @@ class SBTransformerBlock_wrnnbefore(nn.Module):
             out = out + x
 
         return out
-
 
 
 class SkiM(nn.Module):
@@ -821,7 +823,7 @@ class SkiM_general(nn.Module):
             output = self.output_fc(output).transpose(1, 2)
 
         else:
-            #output = output.view(B, S * K, D)[:, :T, :]  # B, T, D
+            # output = output.view(B, S * K, D)[:, :T, :]  # B, T, D
             output = output.reshape(B, S * K, D)[:, :T, :]  # B, T, D
             output = self.output_fc(output.transpose(1, 2)).transpose(1, 2)
 
@@ -1076,5 +1078,3 @@ class SkiMSeparator_General(AbsSeparator):
     @property
     def num_spk(self):
         return self._num_spk
-
-
