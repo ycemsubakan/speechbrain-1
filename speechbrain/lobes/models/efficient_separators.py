@@ -22,10 +22,7 @@ from speechbrain.lobes.models.transformer.Reformer import ReformerEncoder
 from speechbrain.nnet.CNN import Conv1d
 
 
-
-from speechbrain.lobes.models.transformer.Transformer import (
-    get_lookahead_mask,
-)
+from speechbrain.lobes.models.transformer.Transformer import get_lookahead_mask
 
 from recipes.WSJ0Mix.separation.skim_separator import choose_norm
 
@@ -747,7 +744,7 @@ class FormerBlock_wnormandskip(nn.Module):
         use_norm=True,
         use_skip=True,
         norm_type="cLN",
-        transformer_type='reformer'
+        transformer_type="reformer",
     ):
         super(FormerBlock_wnormandskip, self).__init__()
         self.use_positional_encoding = use_positional_encoding
@@ -761,9 +758,7 @@ class FormerBlock_wnormandskip(nn.Module):
 
         self.causal = causal
 
-
-        
-        if transformer_type == 'reformer':
+        if transformer_type == "reformer":
             self.mdl = ReformerEncoder(
                 d_ffn=d_ffn,
                 num_layers=num_layers,
@@ -776,27 +771,28 @@ class FormerBlock_wnormandskip(nn.Module):
                 dropout=dropout,
                 activation=activation,
                 normalize_before=norm_before,
-                #causal=causal,
-                #attention_type=attention_type
+                # causal=causal,
+                # attention_type=attention_type
             )
-        elif transformer_type == 'longformer':
+        elif transformer_type == "longformer":
             self.mdl = LongformerEncoder(
-                     d_ffn=d_ffn,
-                     num_layers=num_layers,
-                     nhead=nhead,
-                     attention_window=[12] * num_layers,
-                     input_shape=input_shape,
-                     d_model=d_model,
-                     dropout=dropout,
-                     activation=activation,
-                     normalize_before=norm_before,
-                 )
-        elif transformer_type == 'conv': 
-            self.mdl = nn.Conv1d(in_channels=d_model,
-                              out_channels=d_model,
-                              kernel_size=10, 
-                              padding=5,
-                              )
+                d_ffn=d_ffn,
+                num_layers=num_layers,
+                nhead=nhead,
+                attention_window=[12] * num_layers,
+                input_shape=input_shape,
+                d_model=d_model,
+                dropout=dropout,
+                activation=activation,
+                normalize_before=norm_before,
+            )
+        elif transformer_type == "conv":
+            self.mdl = nn.Conv1d(
+                in_channels=d_model,
+                out_channels=d_model,
+                kernel_size=10,
+                padding=5,
+            )
         self.transformer_type = transformer_type
 
         self.use_norm = use_norm
@@ -826,7 +822,7 @@ class FormerBlock_wnormandskip(nn.Module):
         """
         src_mask = get_lookahead_mask(x) if self.causal else None
 
-        if self.transformer_type == 'conv':
+        if self.transformer_type == "conv":
             out = self.mdl(x.permute(0, 2, 1))
             out = out.permute(0, 2, 1)
         else:
@@ -839,10 +835,9 @@ class FormerBlock_wnormandskip(nn.Module):
         if self.use_norm:
             out = self.norm(out)
         if self.use_skip:
-            out = out[:, :x.shape[1], :] + x
+            out = out[:, : x.shape[1], :] + x
 
         return out
-
 
 
 class SBConformerEncoderBlock(nn.Module):

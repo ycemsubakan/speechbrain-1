@@ -100,7 +100,7 @@ Encoder: !new:speechbrain.lobes.models.dual_path.Encoder
 
 
 intra_mdl: !new:recipes.WSJ0Mix.separation.skim_separator.SBTransformerBlock_wnormandskip
-    num_layers: 10 
+    num_layers: 10
     d_model: !ref <out_channels>
     nhead: 8
     d_ffn: 1024
@@ -127,13 +127,13 @@ MaskNet: !new:recipes.WSJ0Mix.separation.skim_separator.SkiMSeparator_General
     input_dim: !ref <N_encoder_out>
     num_spk: 2
     causal: False
-    unit: 256 
+    unit: 256
     segment_size: 150
     layer: 2
     mem_type: 'tf'
     seg_model: !ref <intra_mdl>
     mem_model: !ref <mem_mdl>
-    
+
 
 Decoder: !new:speechbrain.lobes.models.dual_path.Decoder
     in_channels: !ref <N_encoder_out>

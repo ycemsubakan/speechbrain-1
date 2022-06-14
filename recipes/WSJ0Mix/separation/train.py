@@ -651,102 +651,113 @@ if __name__ == "__main__":
         for module in separator.modules.values():
             separator.reset_layer_recursively(module)
 
-    if hparams.get('get_rstats', False):
-       fp_model = whole_model(hparams)
-       from torchinfo import summary
-       import pickle
+    if hparams.get("get_rstats", False):
+        fp_model = whole_model(hparams)
+        from torchinfo import summary
+        import pickle
 
-       from thop import profile as thop_profile
-       from ptflops import get_model_complexity_info
+        from thop import profile as thop_profile
+        from ptflops import get_model_complexity_info
 
-       device = 'cuda'
+        device = "cuda"
 
-       asd = summary(fp_model.to(device), input_size=(1, 64000))
-       print(
-           "memory {}".format(
-               torch.cuda.max_memory_allocated("cuda") / 10 ** 9
-           )
-       )
+        asd = summary(fp_model.to(device), input_size=(1, 64000))
+        print(
+            "memory {}".format(
+                torch.cuda.max_memory_allocated("cuda") / 10 ** 9
+            )
+        )
 
-       fp_model = fp_model.to(device)
-       if not os.path.exists("model_stats"):
-           os.mkdir("model_stats")
+        fp_model = fp_model.to(device)
+        if not os.path.exists("model_stats"):
+            os.mkdir("model_stats")
 
-       mem_results = []
-       time_results = []
-       time_results_manual = []
-       macs_results = []
-       for sec in [1, 2, 4, 8, 16, 32, 64]:
-           print("trying {} sec long input".format(sec))
-           inputs = torch.rand(1, 8000 * sec).to(device) 
-           from torch.profiler import (
-               profile,
-               record_function,
-               ProfilerActivity,
-           )
-           import re
-           import time 
+        mem_results = []
+        time_results = []
+        time_results_manual = []
+        macs_results = []
+        for sec in [1, 2, 4, 8, 16, 32, 64]:
+            print("trying {} sec long input".format(sec))
+            inputs = torch.rand(1, 8000 * sec).to(device)
+            from torch.profiler import (
+                profile,
+                record_function,
+                ProfilerActivity,
+            )
+            import re
+            import time
 
-           with profile(
-               activities=[ProfilerActivity.CPU],
-               profile_memory=True,
-               record_shapes=True,
-           ) as prof:
-               t1 = time.time()
-               fp_model(inputs)
-               t2 = time.time()
+            with profile(
+                activities=[ProfilerActivity.CPU],
+                profile_memory=True,
+                record_shapes=True,
+            ) as prof:
+                t1 = time.time()
+                fp_model(inputs)
+                t2 = time.time()
 
-               max_mem = torch.cuda.max_memory_allocated("cuda") / 10 ** 9
-               mem_results.append(max_mem)
-               print(max_mem)
+                max_mem = torch.cuda.max_memory_allocated("cuda") / 10 ** 9
+                mem_results.append(max_mem)
+                print(max_mem)
 
+            # mem_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
+            #    -204:-190
+            # ]
+            # time_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
+            #    -8:
+            # ]
 
-           #mem_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
-           #    -204:-190
-           #]
-           #time_info = prof.key_averages().table(sort_by="cpu_memory_usage")[
-           #    -8:
-           #]
+            # mem_result = re.findall("\d+\.\d+", mem_info)[0]
+            # time_result = re.findall("\d+\.\d+", time_info)[0]
 
-           #mem_result = re.findall("\d+\.\d+", mem_info)[0]
-           #time_result = re.findall("\d+\.\d+", time_info)[0]
+            # mem_float = (
+            #    float(mem_result) / 1000
+            #    if "Mb" in mem_info
+            #    else float(mem_result)
+            # )
+            # time_float = (
+            #    float(time_result) / 1000
+            #    if "ms" in time_info
+            #    else float(time_result)
+            # )
 
-           #mem_float = (
-           #    float(mem_result) / 1000
-           #    if "Mb" in mem_info
-           #    else float(mem_result)
-           #)
-           #time_float = (
-           #    float(time_result) / 1000
-           #    if "ms" in time_info
-           #    else float(time_result)
-           #)
+            # mem_results.append(mem_float)
+            # time_results.append(time_float)
+            time_results_manual.append(t2 - t1)
 
-           #mem_results.append(mem_float)
-           #time_results.append(time_float)
-           time_results_manual.append(t2-t1)
+            # macs, params = thop_profile(fp_model, inputs=(inputs,),
+            #                            custom_ops={} )
 
-           #macs, params = thop_profile(fp_model, inputs=(inputs,),
-           #                            custom_ops={} )
-    
-           macs2, params2 = get_model_complexity_info(fp_model, (inputs.shape[1], ), as_strings=True, print_per_layer_stat=False, verbose=True)
-           print('MACs = {}'.format(macs2))
-           macs_results.append(macs2)
+            macs2, params2 = get_model_complexity_info(
+                fp_model,
+                (inputs.shape[1],),
+                as_strings=True,
+                print_per_layer_stat=False,
+                verbose=True,
+            )
+            print("MACs = {}".format(macs2))
+            macs_results.append(macs2)
 
-       print(time_results_manual)
-       results = {"time": time_results, 
-                  "time_manual": time_results_manual,
-                  "memory": mem_results, 
-                  "macs": macs_results}
+        print(time_results_manual)
+        results = {
+            "time": time_results,
+            "time_manual": time_results_manual,
+            "memory": mem_results,
+            "macs": macs_results,
+        }
 
-       pickle.dump(
+        pickle.dump(
             results,
             open(
-                "model_stats/" + hparams["experiment_name"] + "{}_seed{}.pkl".format(device, hparams["seed"]),
+                "model_stats/"
+                + hparams["experiment_name"]
+                + "{}_seed{}.pkl".format(device, hparams["seed"]),
                 "wb",
             ),
         )
-       import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
 
     dataloader_opts_valid = hparams.get(
         "dataloader_opts_valid", hparams["dataloader_opts"]

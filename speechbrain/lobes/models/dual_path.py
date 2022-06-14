@@ -1078,7 +1078,7 @@ class Dual_Path_Model(nn.Module):
         parallel_arm=False,
         parallel_K=200,
         parallel_wire_in=False,
-        zero_overlap=False
+        zero_overlap=False,
     ):
         super(Dual_Path_Model, self).__init__()
         self.K = K
@@ -1332,8 +1332,12 @@ class Dual_Path_Model(nn.Module):
                 # [B, N, S, K]
                 input = input.transpose(2, 3).contiguous().view(B, N, -1, K * 2)
 
-                input1 = input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
-                input2 = input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
+                input1 = (
+                    input[:, :, :, :K].contiguous().view(B, N, -1)[:, :, P:]
+                )
+                input2 = (
+                    input[:, :, :, K:].contiguous().view(B, N, -1)[:, :, :-P]
+                )
                 input = input1 + input2
                 # [B, N, L]
                 if gap > 0:
@@ -1348,7 +1352,6 @@ class Dual_Path_Model(nn.Module):
         if rest > 0:
             input = torch.nn.functional.pad(input, (0, rest))
         return input, rest
-
 
 
 class SepformerWrapper(nn.Module):
