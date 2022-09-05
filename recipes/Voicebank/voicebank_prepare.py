@@ -411,12 +411,12 @@ def download_vctk(destination, tmp_dir=None, device="cpu"):
             print("Downloading " + url)
             with urllib.request.urlopen(url) as response:
                 with open(filename, "wb") as tmp_file:
-                    logger.info("... to " + tmp_file.name)
+                    print("... to " + tmp_file.name)
                     shutil.copyfileobj(response, tmp_file)
 
     # Unzip
     for zip_file in zip_files:
-        logger.info("Unzipping " + zip_file)
+        print("Unzipping " + zip_file)
         shutil.unpack_archive(zip_file, tmp_dir, "zip")
         os.remove(zip_file)
 
@@ -435,7 +435,7 @@ def download_vctk(destination, tmp_dir=None, device="cpu"):
     downsampler = Resample(orig_freq=48000, new_freq=16000)
 
     for directory in dirs:
-        logger.info("Resampling " + directory)
+        print("Resampling " + directory)
         dirname = os.path.join(tmp_dir, directory)
 
         # Make directory to store downsampled files
@@ -461,7 +461,7 @@ def download_vctk(destination, tmp_dir=None, device="cpu"):
         # Remove old directory
         os.rmdir(dirname)
 
-    logger.info("Zipping " + final_dir)
+    print("Zipping " + final_dir)
     final_zip = shutil.make_archive(
         base_name=final_dir,
         format="zip",
@@ -469,5 +469,9 @@ def download_vctk(destination, tmp_dir=None, device="cpu"):
         base_dir=os.path.basename(final_dir),
     )
 
-    logger.info(f"Moving {final_zip} to {destination}")
+    print(f"Moving {final_zip} to {destination}")
     shutil.move(final_zip, os.path.join(destination, dataset_name + ".zip"))
+
+
+if __name__ == "__main__":
+    download_vctk("/data2/vctk")

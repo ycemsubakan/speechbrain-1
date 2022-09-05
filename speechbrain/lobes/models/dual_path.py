@@ -945,6 +945,7 @@ class Dual_Path_Model(nn.Module):
         linear_layer_after_inter_intra=True,
         use_global_pos_enc=False,
         max_length=20000,
+        output_activation="relu",
     ):
         super(Dual_Path_Model, self).__init__()
         self.K = K
@@ -977,7 +978,14 @@ class Dual_Path_Model(nn.Module):
         )
         self.end_conv1x1 = nn.Conv1d(out_channels, in_channels, 1, bias=False)
         self.prelu = nn.PReLU()
-        self.activation = nn.ReLU()
+
+        if output_activation == "sigmoid":
+            self.activation = nn.Sigmoid()
+        elif output_activation == "softplus":
+            self.activation = nn.Softplus()
+        else:
+            self.activation = nn.ReLU()
+
         # gated output layer
         self.output = nn.Sequential(
             nn.Conv1d(out_channels, out_channels, 1), nn.Tanh()
