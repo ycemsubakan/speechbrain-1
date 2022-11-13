@@ -568,6 +568,8 @@ class ResourceEfficientSeparationPipeline(nn.Module):
         else:
             hc = None
 
+        # import pdb; pdb.set_trace()
+
         for i in range(self.num_blocks):
             seg_model_type = type(self.seg_model[0]).__name__
             if seg_model_type == "SBTransformerBlock_wnormandskip":
@@ -654,6 +656,7 @@ class ResourceEfficientSeparator(nn.Module):
     def __init__(
         self,
         input_dim: int,
+        output_dim: int,
         causal: bool = True,
         num_spk: int = 2,
         nonlinear: str = "relu",
@@ -678,7 +681,7 @@ class ResourceEfficientSeparator(nn.Module):
         self.model = ResourceEfficientSeparationPipeline(
             input_size=input_dim,
             hidden_size=unit,
-            output_size=input_dim * num_spk,
+            output_size=output_dim * num_spk,
             dropout=dropout,
             num_blocks=layer,
             bidirectional=(not causal),
@@ -711,7 +714,7 @@ class ResourceEfficientSeparator(nn.Module):
         B, T, N = inpt.shape
         processed = self.model(inpt)  # B,T, N
 
-        processed = processed.reshape(B, T, N, self.num_spk)
+        processed = processed.reshape(B, T, -1, self.num_spk)
         masks = self.nonlinear(processed).unbind(dim=3)
 
         mask_tensor = torch.stack([m.permute(0, 2, 1) for m in masks])

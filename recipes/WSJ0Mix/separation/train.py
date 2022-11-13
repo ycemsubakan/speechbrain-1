@@ -35,6 +35,7 @@ import numpy as np
 from tqdm import tqdm
 import csv
 import logging
+from speechbrain.processing.features import spectral_magnitude
 
 
 # Define training procedure
@@ -67,19 +68,35 @@ class Separation(sb.Brain):
                     mix, targets = self.cut_signals(mix, targets)
 
         # Separation
-        mix_w = self.hparams.Encoder(mix)
-        est_mask = self.hparams.MaskNet(mix_w)
-        mix_w = torch.stack([mix_w] * self.hparams.num_spks)
-        sep_h = mix_w * est_mask
+        if self.use_freq_domain:
+            mix_w = self.compute_feats(mix)
+            Inp = self.hparams.Adapter(mix_w).permute(0, 2, 1)
+            est_mask = self.modules.masknet(Inp)
 
-        # Decoding
-        est_source = torch.cat(
-            [
-                self.hparams.Decoder(sep_h[i]).unsqueeze(-1)
-                for i in range(self.hparams.num_spks)
-            ],
-            dim=-1,
-        )
+            sep_h = mix_w.permute(0, 2, 1).unsqueeze(0) * est_mask
+            # est_source = self.hparams.resynth(torch.expm1(sep_h), mix)
+            est_source = torch.cat(
+                [
+                    self.hparams.resynth(
+                        torch.expm1(sep_h[i].permute(0, 2, 1)), mix
+                    ).unsqueeze(-1)
+                    for i in range(self.hparams.num_spks)
+                ],
+                dim=-1,
+            )
+        else:
+            mix_w = self.hparams.Encoder(mix)
+            est_mask = self.modules.masknet(mix_w)
+
+            mix_w = torch.stack([mix_w] * self.hparams.num_spks)
+            sep_h = mix_w * est_mask
+            est_source = torch.cat(
+                [
+                    self.hparams.Decoder(sep_h[i]).unsqueeze(-1)
+                    for i in range(self.hparams.num_spks)
+                ],
+                dim=-1,
+            )
 
         # T changed after conv1d in encoder, fix it here
         T_origin = mix.size(1)
@@ -89,11 +106,40 @@ class Separation(sb.Brain):
         else:
             est_source = est_source[:, :T_origin, :]
 
-        return est_source, targets
+        return (est_source, sep_h), targets
+
+    def compute_feats(self, wavs):
+        """Feature computation pipeline"""
+        feats = self.hparams.Encoder(wavs)
+        feats = spectral_magnitude(feats, power=0.5)
+        feats = torch.log1p(feats)
+        return feats
 
     def compute_objectives(self, predictions, targets):
-        """Computes the sinr loss"""
-        return self.hparams.loss(targets, predictions)
+        """Computes the si-snr loss"""
+        predicted_wavs, predicted_specs = predictions
+        if self.use_freq_domain:
+            target_specs = self.compute_feats(targets).permute(3, 0, 2, 1)
+            loss = (
+                (
+                    (target_specs.unsqueeze(0) - predicted_specs.unsqueeze(1))
+                    ** 2
+                )
+                .mean(-1)
+                .mean(-1)
+            )
+            loss = loss.min(1)[0].mean()
+
+            return loss
+            # self.hparams.loss(target_specs, predicted_specs)
+        else:
+            return self.hparams.loss(
+                targets.unsqueeze(-1), predicted_wavs.unsqueeze(-1)
+            )
+
+    # def compute_objectives(self, predictions, targets):
+    #    """Computes the sinr loss"""
+    #    return self.hparams.loss(targets, predictions)
 
     def fit_batch(self, batch):
         """Trains one batch"""
@@ -184,7 +230,10 @@ class Separation(sb.Brain):
 
         with torch.no_grad():
             predictions, targets = self.compute_forward(mixture, targets, stage)
-            loss = self.compute_objectives(predictions, targets)
+            if self.use_freq_domain:
+                loss = self.hparams.loss(targets, predictions[0]).mean()
+            else:
+                loss = self.compute_objectives(predictions, targets)
 
         # Manage audio file saving
         if stage == sb.Stage.TEST and self.hparams.save_audio:
@@ -623,6 +672,10 @@ if __name__ == "__main__":
     if "pretrained_separator" not in hparams:
         for module in separator.modules.values():
             separator.reset_layer_recursively(module)
+
+    # determine if frequency domain enhancement or not
+    use_freq_domain = hparams.get("use_freq_domain", False)
+    separator.use_freq_domain = use_freq_domain
 
     if not hparams["test_only"]:
         # Training
