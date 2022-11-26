@@ -731,6 +731,17 @@ def get_snr_with_pitwrapper(source, estimate_source):
 
     return loss
 
+def spec_mse(source, estimate_source):
+    diff = (source - estimate_source).pow(2)
+    return diff.mean(0, keepdim=True)
+
+def get_mse_with_pitwrapper(source, estimate_source):
+    
+    pit_mse = PitWrapper(spec_mse)
+    loss, perms = pit_mse(source, estimate_source)
+
+    return loss
+
 
 def cal_si_snr(source, estimate_source):
     """Calculate SI-SNR.

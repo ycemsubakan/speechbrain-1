@@ -36,6 +36,8 @@ from tqdm import tqdm
 import csv
 import logging
 from speechbrain.processing.features import spectral_magnitude
+from speechbrain.nnet.losses import get_mse_with_pitwrapper
+from speechbrain.utils.metric_stats import MetricStats
 
 
 # Define training procedure
@@ -115,20 +117,25 @@ class Separation(sb.Brain):
         feats = torch.log1p(feats)
         return feats
 
-    def compute_objectives(self, predictions, targets):
+    def compute_objectives(self, predictions, targets, batchid=None):
         """Computes the si-snr loss"""
         predicted_wavs, predicted_specs = predictions
         if self.use_freq_domain:
-            target_specs = self.compute_feats(targets).permute(3, 0, 2, 1)
-            loss = (
-                (
-                    (target_specs.unsqueeze(0) - predicted_specs.unsqueeze(1))
-                    ** 2
-                )
-                .mean(-1)
-                .mean(-1)
+            # Evaluate speech quality/intelligibility
+            self.sisnr_metric.append(
+                batchid, predicted_wavs, targets
             )
-            loss = loss.min(1)[0].mean()
+            torchaudio.save('estimated.wav', predicted_wavs[:1, :, 0].data.cpu(), 8000)
+
+            target_specs = self.compute_feats(targets).permute(3, 0, 2, 1)
+            # loss_perm1 = (target_specs - predicted_specs).pow(2).mean()
+            # loss_perm2 = (target_specs[[1, 0]] - predicted_specs).pow(2).mean()             
+
+            # loss = min(loss_perm1, loss_perm2)
+            #loss = loss.min(1)[0].mean()
+            target_specs = target_specs.reshape(2, self.hparams.batch_size, -1).permute(1, 2, 0)
+            predicted_specs = predicted_specs.reshape(2, self.hparams.batch_size, -1).permute(1, 2, 0)
+            loss = get_mse_with_pitwrapper(target_specs, predicted_specs).mean()
 
             return loss
             # self.hparams.loss(target_specs, predicted_specs)
@@ -155,7 +162,7 @@ class Separation(sb.Brain):
                 predictions, targets = self.compute_forward(
                     mixture, targets, sb.Stage.TRAIN
                 )
-                loss = self.compute_objectives(predictions, targets)
+                loss = self.compute_objectives(predictions, targets, batch.id)
 
                 # hard threshold the easy dataitems
                 if self.hparams.threshold_byloss:
@@ -189,7 +196,7 @@ class Separation(sb.Brain):
             predictions, targets = self.compute_forward(
                 mixture, targets, sb.Stage.TRAIN
             )
-            loss = self.compute_objectives(predictions, targets)
+            loss = self.compute_objectives(predictions, targets, batch.id)
 
             if self.hparams.threshold_byloss:
                 th = self.hparams.threshold
@@ -217,7 +224,6 @@ class Separation(sb.Brain):
                 )
                 loss.data = torch.tensor(0).to(self.device)
         self.optimizer.zero_grad()
-
         return loss.detach().cpu()
 
     def evaluate_batch(self, batch, stage):
@@ -230,10 +236,7 @@ class Separation(sb.Brain):
 
         with torch.no_grad():
             predictions, targets = self.compute_forward(mixture, targets, stage)
-            if self.use_freq_domain:
-                loss = self.hparams.loss(targets, predictions[0]).mean()
-            else:
-                loss = self.compute_objectives(predictions, targets)
+            loss = self.compute_objectives(predictions, targets, snt_id)
 
         # Manage audio file saving
         if stage == sb.Stage.TEST and self.hparams.save_audio:
@@ -246,10 +249,17 @@ class Separation(sb.Brain):
 
         return loss.detach()
 
+
+    def on_stage_start(self, stage, epoch=None):
+        """Gets called at the beginning of each epoch"""
+        self.sisnr_metric = MetricStats(metric=self.hparams.get_sisnr)
+
+        
     def on_stage_end(self, stage, stage_loss, epoch):
         """Gets called at the end of a epoch."""
         # Compute/store important stats
-        stage_stats = {"si-snr": stage_loss}
+        stage_stats = {"mse": stage_loss,
+                       "si-snr": self.sisnr_metric.summarize('average')}
         if stage == sb.Stage.TRAIN:
             self.train_stats = stage_stats
 
