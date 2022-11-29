@@ -63,9 +63,22 @@ class SepDecoder(nn.Module):
             bias=False,
         )
 
+    @staticmethod
+    def _check_shapes(x, psi_out):
+        for i in range(x.dim() - 1):
+            # -1 only if broadcasting in time!
+            assert x.shape[i] == psi_out.shape[i], f"{i+1}-th of input and psi_out doesn't match. Got {psi_out.shape} expect {x.shape}."
+
     def forward(self, x, psi_out):
         # psi_out is expected to be sth like (2, B, out_channels, T_strided)
         mix_w = self.encoder(x)
+        
+        # check shapes before conditioning
+        self._check_shapes(mix_w, psi_out[0])
+        self._check_shapes(mix_w, psi_out[1])
+
+        # condition with psi_out
+        mix_w = mix_w * psi_out[0] + psi_out[1]
 
         # generates masks for garbage and interpretation
         est_mask = self.masknet(mix_w) 
@@ -89,8 +102,10 @@ class SepDecoder(nn.Module):
         return est_source
 
 if __name__ == "__main__":
-    x = torch.randn(1, 441000 * 5)
+    x = torch.randn(1, 16000 * 2)
     psi_out = torch.randn(2, 1, 256, 1)
     m = SepDecoder()
+    from torchinfo import summary
+    summary(m)
     m(x, psi_out)
 
