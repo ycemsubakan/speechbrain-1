@@ -222,6 +222,8 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         #  generate log-mag spectrogram
         reconstructed = self.modules.decoder(wavs, psi_out)
+        self.hparams.tensorboard_train_logger.log_audio("interpret", reconstructed[0, :, 0], sample_rate=44100)
+        self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=44100)
        
         # here select only interepretation source
         r_stft = self.modules.compute_stft(reconstructed[..., 0])
@@ -259,15 +261,14 @@ class InterpreterESC50Brain(sb.core.Brain):
         batch = batch.to(self.device)
         wavs, lens = batch.sig
 
-        #if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
-            #self.top_3_fidelity.append(batch.id, theta_out, classification_out)
-            #self.faithfulness.append(batch.id, wavs, classification_out)
-        #
-        #self.acc_metric.append(
-            #uttid, predict=classification_out, target=classid, length=lens
-        #)
+        if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
+            self.top_3_fidelity.append(batch.id, theta_out, classification_out)
+            self.faithfulness.append(batch.id, wavs, reconstructions, classification_out)
+        
+        self.acc_metric.append(
+            uttid, predict=classification_out, target=classid, length=lens
+        )
         loss_nmf = ((reconstructions.sum(-1) - wavs) ** 2).mean()
-        # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
         #loss_nmf = self.hparams.alpha * loss_nmf
 
         # HERE add energy term on garbage reconstruction
@@ -277,8 +278,6 @@ class InterpreterESC50Brain(sb.core.Brain):
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
-        #self.last_batch = batch
-        #self.batch_to_plot = (reconstructions.clone(), X_stft_logpower.clone())
         theta_out = -torch.log(
                 F.softmax(theta_out, dim=0),
             )
@@ -311,19 +310,14 @@ class InterpreterESC50Brain(sb.core.Brain):
             return temp
 
         @torch.no_grad()
-        def compute_faithfulness(wavs, predictions):
-            X_stft = self.modules.compute_stft(wavs).to(self.device)
+        def compute_faithfulness(wavs, reconstructions, predictions):
+            garbage = wavs - reconstructions[..., 1]
+            X_stft = self.modules.compute_stft(garbage).to(self.device)
             X_stft_power = sb.processing.features.spectral_magnitude(
                 X_stft, power=self.hparams.spec_mag_power
-            ).transpose(1, 2)
+            )
 
-            X2 = torch.zeros_like(X_stft_power)
-            for (i, wav) in enumerate(wavs):
-                X2[i] = X_stft_power[i] - self.interpret_sample(
-                    wav.unsqueeze(0)
-                )
-
-            X2_logmel = self.modules.compute_fbank(X2.transpose(1, 2))
+            X2_logmel = self.modules.compute_fbank(X_stft_power)
 
             embeddings, _ = self.hparams.embedding_model(X2_logmel)
             predictions_masked = self.hparams.classifier(embeddings).squeeze(1)
@@ -353,68 +347,72 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.acc_metric = sb.utils.metric_stats.MetricStats(
             metric=accuracy_value, n_jobs=1
         )
+
         return super().on_stage_start(stage, epoch)
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """Gets called at the end of an epoch.
         Plots in subplots the values of `self.batch_to_plot` and saves the
         plot to the experiment folder. `self.hparams.output_folder`"""
-        pass
-        #if stage == sb.Stage.TRAIN:
-            #self.train_loss = stage_loss
-            #self.train_stats = {
-                #"loss": self.train_loss,
-                #"acc": self.acc_metric.summarize("average"),
-            #}
-#
-        #if stage == sb.Stage.VALID:
-            #current_fid = self.top_3_fidelity.summarize("average")
-            #old_lr, new_lr = self.hparams.lr_annealing(
-                #[self.optimizer], epoch, -current_fid
-            #)
-            #sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
-            #valid_stats = {
-                #"loss": stage_loss,
-                #"acc": self.acc_metric.summarize("average"),
-                #"top-3_fid": current_fid,
-                #"faithfulness_median": torch.Tensor(
-                    #self.faithfulness.scores
-                #).median(),
-                #"faithfulness_mean": torch.Tensor(
-                    #self.faithfulness.scores
-                #).mean(),
-            #}
-#
-            ## The train_logger writes a summary to stdout and to the logfile.
-            #self.hparams.train_logger.log_stats(
-                #stats_meta={"epoch": epoch, "lr": old_lr},
-                #train_stats=self.train_stats,
-                #valid_stats=valid_stats,
-            #)
-#
-            ## Save the current checkpoint and delete previous checkpoints,
-            #self.checkpointer.save_and_keep_only(
-                #meta=valid_stats, max_keys=["top-3_fid"]
-            #)
-#
-        #if stage == sb.Stage.TEST:
-            #current_fid = self.top_3_fidelity.summarize("average")
-            #test_stats = {
-                #"loss": stage_loss,
-                #"acc": self.acc_metric.summarize("average"),
-                #"top-3_fid": current_fid,
-                #"faithfulness_median": torch.Tensor(
-                    #self.faithfulness.scores
-                #).median(),
-                #"faithfulness_mean": torch.Tensor(
-                    #self.faithfulness.scores
-                #).mean(),
-            #}
-#
-            ## The train_logger writes a summary to stdout and to the logfile.
-            #self.hparams.train_logger.log_stats(
-                #stats_meta={"epoch": epoch}, test_stats=test_stats
-            #)
+        if stage == sb.Stage.TRAIN:
+            self.train_loss = stage_loss
+            self.train_stats = {
+                "loss": self.train_loss,
+                "acc": self.acc_metric.summarize("average"),
+            }
+
+        if stage == sb.Stage.VALID:
+            current_fid = self.top_3_fidelity.summarize("average")
+            old_lr, new_lr = self.hparams.lr_annealing(
+                [self.optimizer], epoch, -current_fid
+            )
+            sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
+            valid_stats = {
+                "loss": stage_loss,
+                "acc": self.acc_metric.summarize("average"),
+                "top-3_fid": current_fid,
+                "faithfulness_median": torch.Tensor(
+                    self.faithfulness.scores
+                ).median(),
+                "faithfulness_mean": torch.Tensor(
+                    self.faithfulness.scores
+                ).mean(),
+            }
+
+            if self.hparams.use_tensorboard:
+                self.hparams.tensorboard_train_logger.log_stats(
+                    {"Epoch": epoch}, self.train_stats, valid_stats
+                )
+            # The train_logger writes a summary to stdout and to the logfile.
+            self.hparams.train_logger.log_stats(
+                stats_meta={"epoch": epoch, "lr": old_lr},
+                train_stats=self.train_stats,
+                valid_stats=valid_stats,
+            )
+
+            # Save the current checkpoint and delete previous checkpoints,
+            self.checkpointer.save_and_keep_only(
+                meta=valid_stats, max_keys=["top-3_fid"]
+            )
+
+        if stage == sb.Stage.TEST:
+            current_fid = self.top_3_fidelity.summarize("average")
+            test_stats = {
+                "loss": stage_loss,
+                "acc": self.acc_metric.summarize("average"),
+                "top-3_fid": current_fid,
+                "faithfulness_median": torch.Tensor(
+                    self.faithfulness.scores
+                ).median(),
+                "faithfulness_mean": torch.Tensor(
+                    self.faithfulness.scores
+                ).mean(),
+            }
+
+            # The train_logger writes a summary to stdout and to the logfile.
+            self.hparams.train_logger.log_stats(
+                stats_meta={"epoch": epoch}, test_stats=test_stats
+            )
 
 
 if __name__ == "__main__":
