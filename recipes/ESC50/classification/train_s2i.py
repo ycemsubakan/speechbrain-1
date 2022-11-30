@@ -12,7 +12,7 @@ from speechbrain.utils.metric_stats import MetricStats
 from os import makedirs
 import torch.nn.functional as F
 from speechbrain.processing.NMF import spectral_phase
-
+from speechbrain.nnet.losses import cal_si_snr
 
 eps = 1e-10
 
@@ -222,15 +222,15 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         #  generate log-mag spectrogram
         reconstructed = self.modules.decoder(wavs, psi_out)
-        self.hparams.tensorboard_train_logger.log_audio("interpret", reconstructed[0, :, 0], sample_rate=44100)
-        self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=44100)
+        self.hparams.tensorboard_train_logger.log_audio("interpret", reconstructed[0, :, 0], sample_rate=self.hparams.sample_rate)
+        self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=self.hparams.sample_rate)
        
         # here select only interepretation source
         r_stft = self.modules.compute_stft(reconstructed[..., 0])
         r_stft_power = sb.processing.features.spectral_magnitude(
             r_stft, power=self.hparams.spec_mag_power
         )
-        r_logmel = self.modules.compute_fbank(X_stft_power)
+        r_logmel = self.modules.compute_fbank(r_stft_power)
 
         # generate classifications from interpretation 
         embeddings_reconstruction, _ = self.hparams.embedding_model(r_logmel)
@@ -268,7 +268,8 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
-        loss_nmf = ((reconstructions.sum(-1) - wavs) ** 2).mean()
+        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions.sum(-1).t().unsqueeze(-1)).mean()
+        #loss_rec = ((reconstructions.sum(-1) - wavs) ** 2).mean()
         #loss_nmf = self.hparams.alpha * loss_nmf
 
         # HERE add energy term on garbage reconstruction
@@ -283,7 +284,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             )
         loss_fdi = (F.softmax(classification_out, dim=0) * theta_out).mean()
 
-        return loss_nmf + loss_fdi
+        return loss_rec #+ loss_fdi
 
     def on_stage_start(self, stage, epoch=None):
         def accuracy_value(predict, target, length):
@@ -311,7 +312,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         @torch.no_grad()
         def compute_faithfulness(wavs, reconstructions, predictions):
-            garbage = wavs - reconstructions[..., 1]
+            garbage = wavs - reconstructions[..., 0]
             X_stft = self.modules.compute_stft(garbage).to(self.device)
             X_stft_power = sb.processing.features.spectral_magnitude(
                 X_stft, power=self.hparams.spec_mag_power

@@ -26,16 +26,16 @@ class Psi(nn.Module):
             stride=2,
             padding=1,
         )
-        self.bn = nn.BatchNorm2d(in_embed_dims[1])
+        #self.bn = nn.BatchNorm2d(in_embed_dims[1])
         self.relu = nn.ReLU()
 
         self.out = nn.Linear(in_embed_dims[0] * 2, n_comp)
-        self.out_bn = nn.BatchNorm1d(n_comp)
+        #self.out_bn = nn.BatchNorm1d(n_comp)
 
     def forward(self, f_i):
         batch_size = f_i[0].shape[0]
         # f_I is a tuple of hidden representations
-        x3 = self.relu(self.bn(self.conv_1(f_i[2])))
+        x3 = self.relu(self.conv_1(f_i[2]))
 
         comb = torch.cat(
                 (
@@ -117,7 +117,7 @@ class SepDecoder(nn.Module):
             ), f"{i+1}-th of input and psi_out doesn't match. Got {psi_out.shape} expect {x.shape}."
 
     def forward(self, x, psi_out):
-        # psi_out is expected to be sth like (2, B, out_channels, T_strided)
+        # psi_out is expected to be sth like (2, B, out_channels, 1)
         mix_w = self.encoder(x)
 
         # check shapes before conditioning
