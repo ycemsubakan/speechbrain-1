@@ -222,8 +222,8 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         #  generate log-mag spectrogram
         reconstructed = self.modules.decoder(wavs, psi_out)
-        self.hparams.tensorboard_train_logger.log_audio("interpret", reconstructed[0, :, 0], sample_rate=self.hparams.sample_rate)
-        self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=self.hparams.sample_rate)
+        # self.hparams.tensorboard_train_logger.log_audio("interpret", reconstructed[0, :, 0], sample_rate=self.hparams.sample_rate)
+        # self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=self.hparams.sample_rate)
        
         # here select only interepretation source
         r_stft = self.modules.compute_stft(reconstructed[..., 0])
@@ -268,7 +268,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
-        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions.sum(-1).t().unsqueeze(-1)).mean()
+        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions[..., 0].t().unsqueeze(-1)).mean()
         #loss_rec = ((reconstructions.sum(-1) - wavs) ** 2).mean()
         #loss_nmf = self.hparams.alpha * loss_nmf
 

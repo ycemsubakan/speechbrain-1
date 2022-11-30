@@ -57,7 +57,7 @@ step_size: 65000
 sample_rate: 44100
 interpret_period: 1 
 
-device: "cpu"
+device: "cuda"
 
 # Feature parameters
 n_mels: 80
@@ -248,7 +248,7 @@ psi_model: !new:custom_models.Psi
 # Decoder
 decoder: !new:custom_models.SepDecoder
   enc_kernel_size: !ref <enc_dim> 
-  d_ffn: 256
+  d_ffn: 1024
   nhead: 4
   num_layers_tb: 4
 
