@@ -29,15 +29,22 @@ class Psi(nn.Module):
         self.bn = nn.BatchNorm2d(in_embed_dims[1])
         self.relu = nn.ReLU()
 
-        self.out = nn.Linear(in_embed_dims[0] * 2, 2 * n_comp)
+        self.out = nn.Linear(in_embed_dims[0] * 2, 4 * n_comp)
 
     def forward(self, f_i):
         batch_size = f_i[0].shape[0]
         # f_I is a tuple of hidden representations
         x3 = self.relu(self.bn(self.conv_1(f_i[2])))
 
-        comb = torch.cat((x3, f_i[1], f_i[0]), dim=1)
-        comb = F.adaptive_avg_pool2d(comb, (1, 1)).view(batch_size, -1)
+        comb = torch.cat(
+                (
+                    F.adaptive_avg_pool2d(x3, (1, 1)),
+                    F.adaptive_avg_pool2d(f_i[1], (1, 1)),
+                    F.adaptive_avg_pool2d(f_i[0], (1, 1))
+                ),
+                dim=1
+            )
+        comb = comb.view(batch_size, -1)
 
         psi_out = self.out(comb).view(2, batch_size, -1, 1)
 
@@ -46,7 +53,7 @@ class Psi(nn.Module):
 
 class SepDecoder(nn.Module):
     def __init__(
-        self, enc_kernel_size=16, enc_outchannels=256, out_channels=256
+        self, enc_kernel_size=16, enc_outchannels=256, out_channels=256, d_ffn=1024, nhead=8, num_layers_tb=8
     ):
         """
         Implements decoding to generate interpretation from raw audio input
@@ -60,20 +67,20 @@ class SepDecoder(nn.Module):
         )
 
         self.SBtfintra = SBTransformerBlock(
-            num_layers=8,
+            num_layers=num_layers_tb,
             d_model=out_channels,
-            nhead=8,
-            d_ffn=1024,
+            nhead=nhead,
+            d_ffn=d_ffn,
             dropout=0,
             use_positional_encoding=True,
             norm_before=True,
         )
 
         self.SBtfinter = SBTransformerBlock(
-            num_layers=8,
+            num_layers=num_layers_tb,
             d_model=out_channels,
-            nhead=8,
-            d_ffn=1024,
+            nhead=nhead,
+            d_ffn=d_ffn,
             dropout=0,
             use_positional_encoding=True,
             norm_before=True,

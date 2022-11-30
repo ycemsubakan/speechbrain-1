@@ -57,7 +57,7 @@ step_size: 65000
 sample_rate: 44100
 interpret_period: 1 
 
-device: "cuda:0"
+device: "cpu"
 
 # Feature parameters
 n_mels: 80
@@ -194,15 +194,22 @@ classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     out_neurons: !ref <out_n_neurons>
     lin_blocks: 1
 
-embedding_model_path: speechbrain/cnn14-esc50/embedding_model_esc50ft.ckpt
-classifier_model_path: speechbrain/cnn14-esc50/classifier_esc50.ckpt
+theta: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+    input_size: 2048
+    out_neurons: !ref <out_n_neurons>
+    lin_blocks: 1
+
+embedding_model_path: cemsubakan/cnn14-esc50/embedding_model_esc50ft.ckpt
+classifier_model_path: cemsubakan/cnn14-esc50/classifier_esc50.ckpt
 pretrained_esc50: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
         embedding_model: !ref <embedding_model>
+        theta: !ref <classifier>
         classifier: !ref <classifier>
     paths:
         embedding_model: !ref <embedding_model_path>
+        theta: !ref <classifier_model_path>
         classifier: !ref <classifier_model_path>
 
 # Interpretation hyperparams
@@ -231,16 +238,16 @@ compute_istft: !new:speechbrain.processing.features.ISTFT
     hop_length: !ref <hop_length>
     win_length: !ref <win_length>
 
-psi_model: !new:speechbrain.lobes.models.L2I.Psi
-theta: !new:speechbrain.lobes.models.L2I.Theta
+enc_dim: 128
+psi_model: !new:custom_models.Psi
+  n_comp: !ref <enc_dim>
 
-# NMF Decoder
-nmf_d_path: "nmf_decoder.pt"
-nmf: !new:speechbrain.lobes.models.L2I.NMFDecoder
-    init_file: !ref <nmf_d_path>
-    N_COMP: !ref <K>
-    FREQ: !ref <n_mels>
-    device: !ref <device> 
+# Decoder
+decoder: !new:custom_models.SepDecoder
+  enc_kernel_size: !ref <enc_dim> 
+  d_ffn: 256
+  nhead: 4
+  num_layers_tb: 4
 
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations
@@ -258,4 +265,4 @@ modules:
     add_rev_noise: !ref <add_rev_noise>
     mean_var_norm: !ref <mean_var_norm>
     psi: !ref <psi_model>
-    theta: !ref <theta>
+    decoder: !ref <decoder>
