@@ -29,7 +29,7 @@ class Psi(nn.Module):
         self.bn = nn.BatchNorm2d(in_embed_dims[1])
         self.relu = nn.ReLU()
 
-        self.out = nn.Linear(in_embed_dims[0] * 2, 4 * n_comp)
+        self.out = nn.Linear(in_embed_dims[0] * 2, n_comp)
 
     def forward(self, f_i):
         batch_size = f_i[0].shape[0]

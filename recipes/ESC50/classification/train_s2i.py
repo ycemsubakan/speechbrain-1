@@ -219,8 +219,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         predictions = self.hparams.classifier(embeddings).squeeze(1)
 
         psi_out = self.modules.psi(f_I)  # generate nmf activations
-        # cut the length of psi
-        psi_out = psi_out[:, :, : X_stft_power.shape[1]]
 
         #  generate log-mag spectrogram
         reconstructed = self.modules.decoder(wavs, psi_out)
