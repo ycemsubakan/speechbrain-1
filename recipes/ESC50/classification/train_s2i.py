@@ -470,14 +470,6 @@ def dataio_prep(hparams):
                 randstart : randstart + hparams['training_signal_len']
             ]
 
-        # if self.noise:
-        #     energy_signal = (inp_audio ** 2).mean()
-        #     noise = np.random.normal(0, 0.05, inp_audio.shape[0])
-        #     energy_noise = (noise ** 2).mean()
-        #     const = np.sqrt(energy_signal / energy_noise)
-        #     noise = const * noise
-        #     inp_audio = inp_audio + noise
-
         return torch.from_numpy(inp_audio)
 
     # 3. Define label pipeline:
