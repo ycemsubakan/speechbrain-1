@@ -28,15 +28,16 @@ class Psi(nn.Module):
         )
         #self.bn = nn.BatchNorm2d(in_embed_dims[1])
         self.relu = nn.ReLU()
-
-        self.out = nn.Linear(in_embed_dims[0] * 2, n_comp)
+        
+        self.fc = nn.Linear(in_embed_dims[0] * 2, n_comp)
+        self.out = nn.Linear(n_comp, n_comp)
         #self.out_bn = nn.BatchNorm1d(n_comp)
 
     def forward(self, f_i):
         batch_size = f_i[0].shape[0]
         # f_I is a tuple of hidden representations
         x3 = self.relu(self.conv_1(f_i[2]))
-
+        
         comb = torch.cat(
                 (
                     F.adaptive_avg_pool2d(x3, (1, 1)),
@@ -46,10 +47,11 @@ class Psi(nn.Module):
                 dim=1
             )
         comb = comb.view(batch_size, -1)
+        
+        temp = self.relu(self.fc(comb))
+        psi_out = self.out(temp).view(2, batch_size, -1, 1)
 
-        psi_out = self.out(comb).view(2, batch_size, -1, 1)
-
-        return self.relu(psi_out)
+        return psi_out # relu here is not appreciated for reconstruction
 
 
 class SepDecoder(nn.Module):
@@ -103,8 +105,8 @@ class SepDecoder(nn.Module):
         self.decoder = Decoder(
             in_channels=enc_outchannels,
             out_channels=1,
-            kernel_size=16,
-            stride=8,
+            kernel_size=enc_kernel_size,
+            stride=enc_kernel_size // 2,
             bias=False,
         )
 
@@ -125,7 +127,7 @@ class SepDecoder(nn.Module):
         self._check_shapes(mix_w, psi_out[1])
 
         # condition with psi_out
-        #mix_w = mix_w * psi_out[0] + psi_out[1]
+        mix_w = mix_w * psi_out[0] + psi_out[1]
 
         # generates masks for garbage and interpretation
         est_mask = self.masknet(mix_w)

@@ -129,6 +129,52 @@ class InterpreterESC50Brain(sb.core.Brain):
             )
 
         return X_int
+    
+    def save_interpretations(self, wavs, reconstructions, pred_classes, batch=None):
+        """ get the interpratation for a given wav file."""        
+        # save reconstructed and original spectrograms
+        makedirs(
+            os.path.join(
+                self.hparams.output_folder, f"audios_from_interpretation",
+            ),
+            exist_ok=True,
+        )
+        
+        pred_cl = torch.argmax(pred_classes[0], dim=0).item()
+        current_class_ind = batch.class_string_encoded.data[0].item()
+        current_class_name = self.hparams.label_encoder.ind2lab[
+            current_class_ind
+        ]
+        predicted_class_name = self.hparams.label_encoder.ind2lab[pred_cl]
+        torchaudio.save(
+            os.path.join(
+                self.hparams.output_folder,
+                f"audios_from_interpretation",
+                f"original_tc_{current_class_name}_pc_{predicted_class_name}.wav",
+            ),
+            wavs[0].unsqueeze(0).clone().cpu(),
+            self.hparams.sample_rate,
+        )
+
+        torchaudio.save(
+            os.path.join(
+                self.hparams.output_folder,
+                f"audios_from_interpretation",
+                f"interpretation_tc_{current_class_name}_pc_{predicted_class_name}.wav",
+            ),
+            reconstructions[0, :, 0].unsqueeze(0).clone().cpu(),
+            self.hparams.sample_rate,
+        )
+        
+        torchaudio.save(
+            os.path.join(
+                self.hparams.output_folder,
+                f"audios_from_interpretation",
+                f"garbage_tc_{current_class_name}_pc_{predicted_class_name}.wav",
+            ),
+            reconstructions[0, :, 1].unsqueeze(0).clone().cpu(),
+            self.hparams.sample_rate,
+        )
 
     def overlap_test(self, batch):
         """interpration test with overlapped audio"""
@@ -216,9 +262,12 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_logmel = self.modules.compute_fbank(X_stft_power)
 
         # Embeddings + sound classifier
-        embeddings, f_I = self.hparams.embedding_model(X_logmel)
-        predictions = self.hparams.classifier(embeddings).squeeze(1)
-
+        self.hparams.embedding_model.eval()
+        self.hparams.classifier.eval()
+        with torch.no_grad():
+            embeddings, f_I = self.hparams.embedding_model(X_logmel)
+            predictions = self.hparams.classifier(embeddings).squeeze(1)
+        
         psi_out = self.modules.psi(f_I)  # generate nmf activations
 
         #  generate log-mag spectrogram
@@ -234,8 +283,11 @@ class InterpreterESC50Brain(sb.core.Brain):
         r_logmel = self.modules.compute_fbank(r_stft_power)
 
         # generate classifications from interpretation 
-        embeddings_reconstruction, _ = self.hparams.embedding_model(r_logmel)
-        theta_out = self.hparams.theta(embeddings_reconstruction).squeeze(1)
+        self.hparams.embedding_model.eval()
+        self.hparams.classifier.eval()
+        with torch.no_grad():
+            embeddings_reconstruction, _ = self.hparams.embedding_model(r_logmel)
+            theta_out = self.hparams.theta(embeddings_reconstruction).squeeze(1)
 
         if stage == sb.Stage.VALID:
             # save some samples
@@ -244,6 +296,7 @@ class InterpreterESC50Brain(sb.core.Brain):
                 % self.hparams.interpret_period
             ) == 0 and self.hparams.save_interpretations:
                 wavs = wavs[0].unsqueeze(0)
+                self.save_interpretations(wavs, reconstructed, predictions, batch)
                 #self.interpret_sample(wavs, batch)
                 #self.overlap_test(batch)
 
@@ -269,7 +322,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
-        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions[..., 0].t().unsqueeze(-1)).mean()
+        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions.sum(-1).t().unsqueeze(-1)).mean()
         #loss_rec = ((reconstructions.sum(-1) - wavs) ** 2).mean()
         #loss_nmf = self.hparams.alpha * loss_nmf
 
@@ -524,10 +577,6 @@ if __name__ == "__main__":
     with open(hparams_file) as fin:
         hparams = load_hyperpyyaml(fin, overrides)
 
-    # classifier is fixed here
-    hparams["embedding_model"].eval()
-    hparams["classifier"].eval()
-
     # Create experiment directory
     sb.create_experiment_directory(
         experiment_directory=hparams["output_folder"],
@@ -576,11 +625,14 @@ if __name__ == "__main__":
     if "pretrained_esc50" in hparams:
         run_on_main(hparams["pretrained_esc50"].collect_files)
         hparams["pretrained_esc50"].load_collected()
-
+        
     hparams["embedding_model"].to(hparams["device"])
     hparams["classifier"].to(hparams["device"])
     hparams["theta"].to(hparams["device"])
+
+    # classifier is fixed here
     hparams["embedding_model"].eval()
+    hparams["classifier"].eval()
 
     if not hparams["test_only"]:
         Interpreter_brain.fit(

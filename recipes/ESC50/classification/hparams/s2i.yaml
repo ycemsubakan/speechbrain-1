@@ -21,13 +21,13 @@ audio_data_folder: !ref <data_folder>/audio
 # files (mono channel and config SR) to train on
 #reasmpled_audio_data_folder: !ref <data_folder>/audio_mono16kHz
 #
-experiment_name: L2I
+experiment_name: S2I
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 
 test_only: False
-save_interpretations: False
+save_interpretations: True
 limit_training_signal_len: True
 training_signal_len: 100000
 
@@ -96,32 +96,32 @@ augment_speed: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
     sample_rate: !ref <sample_rate>
     speeds: [95, 100, 105]
 
-add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 1.0
-    noise_prob: 0.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
+# add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 1.0
+#     noise_prob: 0.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
 
-add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 0.0
-    noise_prob: 1.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
+# add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 0.0
+#     noise_prob: 1.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
 
-add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 1.0
-    noise_prob: 1.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
+# add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 1.0
+#     noise_prob: 1.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
 
 
 # Definition of the augmentation pipeline.
@@ -250,7 +250,7 @@ psi_model: !new:custom_models.Psi
 # Decoder
 decoder: !new:custom_models.SepDecoder
   enc_kernel_size: 16
-  d_ffn: 1024
+  d_ffn: 512
   nhead: 4
   num_layers_tb: 4
 
@@ -263,11 +263,6 @@ modules:
     compute_fbank: !ref <compute_fbank>
     compute_istft: !ref <compute_istft>
     compute_features: !ref <compute_features>
-    augment_wavedrop: !ref <augment_wavedrop>
-    augment_speed: !ref <augment_speed>
-    add_rev: !ref <add_rev>
-    add_noise: !ref <add_noise>
-    add_rev_noise: !ref <add_rev_noise>
     mean_var_norm: !ref <mean_var_norm>
     psi: !ref <psi_model>
     decoder: !ref <decoder>
