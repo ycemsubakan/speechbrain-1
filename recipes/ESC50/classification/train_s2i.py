@@ -21,115 +21,6 @@ eps = 1e-10
 class InterpreterESC50Brain(sb.core.Brain):
     """Class for sound class embedding training" """
 
-    def interpret_computation_steps(self, wavs):
-        """computation steps to get the interpretation spectrogram"""
-        # compute stft and logmel, and phase
-        X_stft = self.modules.compute_stft(wavs)
-        X_stft_phase = spectral_phase(X_stft)
-        X_stft_power = sb.processing.features.spectral_magnitude(
-            X_stft, power=self.hparams.spec_mag_power
-        )
-        X_logmel = self.modules.compute_fbank(X_stft_power)
-
-        # get the classifier embeddings
-        embeddings, f_I = self.hparams.embedding_model(X_logmel)
-
-        # get the nmf activations
-        psi_out = self.modules.psi(f_I)
-
-        # cut the length of psi in case necessary
-        psi_out = psi_out[:, :, : X_stft_power.shape[1]]
-
-        # get the classifier output
-        predictions = self.hparams.classifier(embeddings).squeeze(1)
-        pred_cl = torch.argmax(predictions, dim=1)[0].item()
-        # print(pred_cl)
-
-        nmf_dictionary = self.hparams.nmf.return_W(dtype="torch")
-
-        # computes time activations per component
-        # FROM NOW ON WE FOLLOW THE PAPER'S NOTATION
-        psi_out = psi_out.squeeze()
-        z = self.modules.theta.hard_att(psi_out).squeeze()
-        theta_c_w = self.modules.theta.classifier[0].weight[pred_cl]
-
-        # some might be negative, relevance of component
-        r_c_x = theta_c_w * z / torch.abs(theta_c_w * z).max()
-        # define selected components by thresholding
-        L = torch.arange(r_c_x.shape[0])[r_c_x > 0.2].tolist()
-
-        # get the log power spectra, this is needed as NMF is trained on log-power spectra
-        X_stft_power_log = (
-            torch.log(X_stft_power + 1).transpose(1, 2).squeeze(0)
-        )
-
-        # cem : for the denominator we need to sum over all K, not just the selected ones.
-        X_withselected = nmf_dictionary[:, L] @ psi_out[L, :]
-        Xhat = nmf_dictionary @ psi_out
-
-        # need the eps for the denominator
-        eps = 1e-10
-        # X_int = (X_ks / (sum_X_k.unsqueeze(0)+eps)).sum(0) * X_stft_power_log
-        X_int = (X_withselected / (Xhat + eps)) * X_stft_power_log
-
-        # get back to the standard stft
-        X_int = torch.exp(X_int) - 1
-        return X_int, X_stft_phase, pred_cl
-
-    def interpret_sample(self, wavs, batch=None):
-        """ get the interpratation for a given wav file."""
-
-        # get the interpretation spectrogram, phase, and the predicted class
-        X_int, X_stft_phase, pred_cl = self.interpret_computation_steps(wavs)
-        if not (batch is None):
-            X_stft_phase_sb = torch.cat(
-                (
-                    torch.cos(X_stft_phase).unsqueeze(-1),
-                    torch.sin(X_stft_phase).unsqueeze(-1),
-                ),
-                dim=-1,
-            )
-
-            temp = X_int.transpose(0, 1).unsqueeze(0).unsqueeze(-1)
-
-            X_wpsb = temp * X_stft_phase_sb
-            x_int_sb = self.modules.compute_istft(X_wpsb)
-
-            # save reconstructed and original spectrograms
-            makedirs(
-                os.path.join(
-                    self.hparams.output_folder, f"audios_from_interpretation",
-                ),
-                exist_ok=True,
-            )
-
-            current_class_ind = batch.class_string_encoded.data[0].item()
-            current_class_name = self.hparams.label_encoder.ind2lab[
-                current_class_ind
-            ]
-            predicted_class_name = self.hparams.label_encoder.ind2lab[pred_cl]
-            torchaudio.save(
-                os.path.join(
-                    self.hparams.output_folder,
-                    f"audios_from_interpretation",
-                    f"original_tc_{current_class_name}_pc_{predicted_class_name}.wav",
-                ),
-                wavs[0].unsqueeze(0),
-                self.hparams.sample_rate,
-            )
-
-            torchaudio.save(
-                os.path.join(
-                    self.hparams.output_folder,
-                    f"audios_from_interpretation",
-                    f"interpretation_tc_{current_class_name}_pc_{predicted_class_name}.wav",
-                ),
-                x_int_sb,
-                self.hparams.sample_rate,
-            )
-
-        return X_int
-    
     def save_interpretations(self, wavs, reconstructions, pred_classes, batch=None):
         """ get the interpratation for a given wav file."""        
         # save reconstructed and original spectrograms
@@ -173,6 +64,17 @@ class InterpreterESC50Brain(sb.core.Brain):
                 f"garbage_tc_{current_class_name}_pc_{predicted_class_name}.wav",
             ),
             reconstructions[0, :, 1].unsqueeze(0).clone().cpu(),
+            self.hparams.sample_rate,
+        )
+
+
+        torchaudio.save(
+            os.path.join(
+                self.hparams.output_folder,
+                f"audios_from_interpretation",
+                f"sum_tc_{current_class_name}_pc_{predicted_class_name}.wav",
+            ),
+            reconstructions.sum(-1)[0, :].unsqueeze(0).clone().cpu(),
             self.hparams.sample_rate,
         )
 
@@ -338,7 +240,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             )
         loss_fdi = (F.softmax(classification_out, dim=0) * theta_out).mean()
 
-        return loss_rec #+ loss_fdi
+        return loss_rec + loss_fdi
 
     def on_stage_start(self, stage, epoch=None):
         def accuracy_value(predict, target, length):

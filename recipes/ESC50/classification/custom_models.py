@@ -127,7 +127,7 @@ class SepDecoder(nn.Module):
         self._check_shapes(mix_w, psi_out[1])
 
         # condition with psi_out
-        mix_w = mix_w * psi_out[0] + psi_out[1]
+        #mix_w = mix_w * psi_out[0] + psi_out[1]
 
         # generates masks for garbage and interpretation
         est_mask = self.masknet(mix_w)
