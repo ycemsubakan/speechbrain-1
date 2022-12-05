@@ -36,8 +36,11 @@ from tqdm import tqdm
 import csv
 import logging
 from speechbrain.processing.features import spectral_magnitude
-from speechbrain.nnet.losses import get_mse_with_pitwrapper
+
+# from speechbrain.nnet.losses import get_mse_with_pitwrapper
 from speechbrain.utils.metric_stats import MetricStats
+
+# import matplotlib.pyplot as plt
 
 
 # Define training procedure
@@ -72,10 +75,23 @@ class Separation(sb.Brain):
         # Separation
         if self.use_freq_domain:
             mix_w = self.compute_feats(mix)
-            Inp = self.hparams.Adapter(mix_w).permute(0, 2, 1)
+
+            if hasattr(self.hparams, "Adapter"):
+                Inp = self.hparams.Adapter(mix_w).permute(0, 2, 1)
+                Inp = torch.nn.functional.relu(Inp)
+            else:
+                Inp = mix_w.permute(0, 2, 1)
+
             est_mask = self.modules.masknet(Inp)
 
             sep_h = mix_w.permute(0, 2, 1).unsqueeze(0) * est_mask
+
+            # plt.imshow(sep_h[0, 0].data.cpu())
+            # plt.savefig('est1_resepstft.png', format='png')
+
+            # plt.imshow(sep_h[1, 0].data.cpu())
+            # plt.savefig('est2_resepstft.png', format='png')
+
             # est_source = self.hparams.resynth(torch.expm1(sep_h), mix)
             est_source = torch.cat(
                 [
@@ -122,21 +138,40 @@ class Separation(sb.Brain):
         predicted_wavs, predicted_specs = predictions
         if self.use_freq_domain:
             # Evaluate speech quality/intelligibility
-            self.sisnr_metric.append(
-                batchid, predicted_wavs, targets
+            self.sisnr_metric.append(batchid, predicted_wavs, targets)
+            torchaudio.save(
+                "estimated.wav", predicted_wavs[:1, :, 0].data.cpu(), 8000
             )
-            torchaudio.save('estimated.wav', predicted_wavs[:1, :, 0].data.cpu(), 8000)
+            torchaudio.save("target.wav", targets[:1, :, 0].data.cpu(), 8000)
 
-            target_specs = self.compute_feats(targets).permute(3, 0, 2, 1)
+            target_specs = [
+                self.compute_feats(targets[:, :, i])
+                for i in range(self.hparams.num_spks)
+            ]
+            target_specs = torch.stack(target_specs).permute(0, 1, 3, 2)
             # loss_perm1 = (target_specs - predicted_specs).pow(2).mean()
-            # loss_perm2 = (target_specs[[1, 0]] - predicted_specs).pow(2).mean()             
+            # loss_perm2 = (target_specs[[1, 0]] - predicted_specs).pow(2).mean()
+            # plt.imshow(target_specs[0, 0, :, :].data.cpu())
+
+            # import pdb; pdb.set_trace()
 
             # loss = min(loss_perm1, loss_perm2)
-            #loss = loss.min(1)[0].mean()
-            target_specs = target_specs.reshape(2, self.hparams.batch_size, -1).permute(1, 2, 0)
-            predicted_specs = predicted_specs.reshape(2, self.hparams.batch_size, -1).permute(1, 2, 0)
-            loss = get_mse_with_pitwrapper(target_specs, predicted_specs).mean()
+            # loss = loss.min(1)[0].mean()
+            sisnr_loss, perms = self.hparams.get_sisnr(targets, predicted_wavs)
+            target_specs = target_specs.reshape(
+                2, targets.shape[0], -1
+            ).permute(1, 2, 0)
+            predicted_specs = predicted_specs.reshape(
+                2, targets.shape[0], -1
+            ).permute(1, 2, 0)
+            predicted_specs = torch.stack(
+                [predicted_specs[i, :, perm] for i, perm in enumerate(perms)]
+            )
+            loss = (predicted_specs - target_specs).pow(
+                2
+            ).mean() + sisnr_loss.mean()
 
+            # loss = get_mse_with_pitwrapper(target_specs, predicted_specs)
             return loss
             # self.hparams.loss(target_specs, predicted_specs)
         else:
@@ -236,30 +271,34 @@ class Separation(sb.Brain):
 
         with torch.no_grad():
             predictions, targets = self.compute_forward(mixture, targets, stage)
-            loss = self.compute_objectives(predictions, targets, snt_id)
+            loss = self.compute_objectives(predictions, targets, snt_id).mean()
 
         # Manage audio file saving
         if stage == sb.Stage.TEST and self.hparams.save_audio:
             if hasattr(self.hparams, "n_audio_to_save"):
                 if self.hparams.n_audio_to_save > 0:
-                    self.save_audio(snt_id[0], mixture, targets, predictions)
+                    self.save_audio(snt_id[0], mixture, targets, predictions[0])
                     self.hparams.n_audio_to_save += -1
             else:
                 self.save_audio(snt_id[0], mixture, targets, predictions)
 
         return loss.detach()
 
-
     def on_stage_start(self, stage, epoch=None):
         """Gets called at the beginning of each epoch"""
-        self.sisnr_metric = MetricStats(metric=self.hparams.get_sisnr)
 
-        
+        def get_snr(source, estimate_source):
+            return self.hparams.get_sisnr(source, estimate_source)[0]
+
+        self.sisnr_metric = MetricStats(metric=get_snr)
+
     def on_stage_end(self, stage, stage_loss, epoch):
         """Gets called at the end of a epoch."""
         # Compute/store important stats
-        stage_stats = {"mse": stage_loss,
-                       "si-snr": self.sisnr_metric.summarize('average')}
+        stage_stats = {
+            "mse": stage_loss,
+            "si-snr": self.sisnr_metric.summarize("average"),
+        }
         if stage == sb.Stage.TRAIN:
             self.train_stats = stage_stats
 
