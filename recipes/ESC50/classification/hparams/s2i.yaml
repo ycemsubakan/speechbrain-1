@@ -57,7 +57,7 @@ base_lr: 0.00002
 max_lr: !ref <lr>
 step_size: 65000
 sample_rate: 44100
-interpret_period: 1 
+interpret_period: 1
 
 device: "cuda"
 
@@ -85,58 +85,6 @@ dataloader_options:
 
 epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
-
-## Data augmentation
-
-augment_wavedrop: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
-    sample_rate: !ref <sample_rate>
-    speeds: [100]
-
-augment_speed: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
-    sample_rate: !ref <sample_rate>
-    speeds: [95, 100, 105]
-
-add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 1.0
-    noise_prob: 0.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
-
-add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 0.0
-    noise_prob: 1.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
-
-add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    openrir_folder: !ref <open_rir_folder>
-    openrir_max_noise_len: 3.0  # seconds
-    reverb_prob: 1.0
-    noise_prob: 1.0
-    noise_snr_low: 0
-    noise_snr_high: 15
-    rir_scale_factor: 1.0
-
-
-# Definition of the augmentation pipeline.
-# If concat_augment = False, the augmentation techniques are applied
-# in sequence. If concat_augment = True, all the augmented signals
-# # are concatenated in a single big batch.
-
-augment_pipeline: [
-    #!ref <augment_wavedrop>,
-    #!ref <augment_speed>,
-    #!ref <add_rev>,
-    #!ref <add_noise>,
-    #!ref <add_rev_noise>
-]
-concat_augment: True
 
 compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
@@ -245,14 +193,14 @@ compute_istft: !new:speechbrain.processing.features.ISTFT
 
 enc_dim: 512
 psi_model: !new:custom_models.Psi
-  n_comp: !ref <enc_dim>
+    n_comp: !ref <enc_dim>
 
 # Decoder
 decoder: !new:custom_models.SepDecoder
-  enc_kernel_size: 16
-  d_ffn: 1024
-  nhead: 4
-  num_layers_tb: 4
+    enc_kernel_size: 16
+    d_ffn: 1024
+    nhead: 4
+    num_layers_tb: 4
 
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations
@@ -263,11 +211,6 @@ modules:
     compute_fbank: !ref <compute_fbank>
     compute_istft: !ref <compute_istft>
     compute_features: !ref <compute_features>
-    augment_wavedrop: !ref <augment_wavedrop>
-    augment_speed: !ref <augment_speed>
-    add_rev: !ref <add_rev>
-    add_noise: !ref <add_noise>
-    add_rev_noise: !ref <add_rev_noise>
     mean_var_norm: !ref <mean_var_norm>
     psi: !ref <psi_model>
     decoder: !ref <decoder>
