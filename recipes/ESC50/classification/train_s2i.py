@@ -164,11 +164,8 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_logmel = self.modules.compute_fbank(X_stft_power)
 
         # Embeddings + sound classifier
-        self.hparams.embedding_model.eval()
-        self.hparams.classifier.eval()
-        with torch.no_grad():
-            embeddings, f_I = self.hparams.embedding_model(X_logmel)
-            predictions = self.hparams.classifier(embeddings).squeeze(1)
+        embeddings, f_I = self.hparams.embedding_model(X_logmel)
+        predictions = self.hparams.classifier(embeddings).squeeze(1)
         
         psi_out = self.modules.psi(f_I)  # generate nmf activations
 
@@ -178,18 +175,18 @@ class InterpreterESC50Brain(sb.core.Brain):
         # self.hparams.tensorboard_train_logger.log_audio("garbage", reconstructed[0, :, 1], sample_rate=self.hparams.sample_rate)
        
         # here select only interepretation source
-        r_stft = self.modules.compute_stft(reconstructed[..., 0])
+        interpretation = reconstructed[..., 0].clone()
+        interpretation = interpretation / torch.max(interpretation, dim=1, keepdim=True).values
+
+        r_stft = self.modules.compute_stft(interpretation)
         r_stft_power = sb.processing.features.spectral_magnitude(
             r_stft, power=self.hparams.spec_mag_power
         )
         r_logmel = self.modules.compute_fbank(r_stft_power)
 
         # generate classifications from interpretation 
-        self.hparams.embedding_model.eval()
-        self.hparams.classifier.eval()
-        with torch.no_grad():
-            embeddings_reconstruction, _ = self.hparams.embedding_model(r_logmel)
-            theta_out = self.hparams.theta(embeddings_reconstruction).squeeze(1)
+        embeddings_reconstruction, _ = self.hparams.embedding_model(r_logmel)
+        theta_out = self.hparams.classifier(embeddings_reconstruction).squeeze(1)
 
         if stage == sb.Stage.VALID:
             # save some samples
@@ -224,7 +221,9 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
-        loss_rec = cal_si_snr(wavs.t().unsqueeze(-1), reconstructions.sum(-1).t().unsqueeze(-1)).mean()
+        loss_rec = ((wavs.t().unsqueeze(-1) - reconstructions.sum(-1).t().unsqueeze(-1))**2).mean()
+        # loss_rec = loss_rec * 0.01  # scaling to match fdi range..
+
         #loss_rec = ((reconstructions.sum(-1) - wavs) ** 2).mean()
         #loss_nmf = self.hparams.alpha * loss_nmf
 
@@ -235,10 +234,8 @@ class InterpreterESC50Brain(sb.core.Brain):
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
-        theta_out = -torch.log(
-                F.softmax(theta_out, dim=0),
-            )
-        loss_fdi = (F.softmax(classification_out, dim=0) * theta_out).mean()
+        loss_fdi = 2 * (F.softmax(classification_out, dim=1) * -torch.log(F.softmax(theta_out, dim=1))).mean()
+        #print(f"fdi {loss_fdi.item()} - rec {loss_rec.item()}")
 
         return loss_rec + loss_fdi
 
@@ -535,6 +532,7 @@ if __name__ == "__main__":
     # classifier is fixed here
     hparams["embedding_model"].eval()
     hparams["classifier"].eval()
+    hparams["theta"].to(hparams["device"])
 
     if not hparams["test_only"]:
         Interpreter_brain.fit(

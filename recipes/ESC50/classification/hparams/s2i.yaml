@@ -20,8 +20,8 @@ audio_data_folder: !ref <data_folder>/audio
 # TODO the follwing folder will contain the resampled audio
 # files (mono channel and config SR) to train on
 #reasmpled_audio_data_folder: !ref <data_folder>/audio_mono16kHz
-#
-experiment_name: S2I_fid_no_cond
+
+experiment_name: fid_debug
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
@@ -29,7 +29,7 @@ train_log: !ref <output_folder>/train_log.txt
 test_only: False
 save_interpretations: True
 limit_training_signal_len: True
-training_signal_len: 100000
+training_signal_len: 200000
 
 # Tensorboard logs
 use_tensorboard: False
