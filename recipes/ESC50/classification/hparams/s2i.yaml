@@ -21,10 +21,12 @@ audio_data_folder: !ref <data_folder>/audio
 # files (mono channel and config SR) to train on
 #reasmpled_audio_data_folder: !ref <data_folder>/audio_mono16kHz
 
-experiment_name: fid_debug
+experiment_name: L_faith_1comp_with_logs
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
+
+log_wandb: True
 
 test_only: False
 save_interpretations: True
@@ -57,7 +59,7 @@ base_lr: 0.00002
 max_lr: !ref <lr>
 step_size: 65000
 sample_rate: 44100
-interpret_period: 1 
+interpret_period: 100
 
 device: "cuda"
 
@@ -210,7 +212,7 @@ pretrained_esc50: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
         embedding_model: !ref <embedding_model>
-        theta: !ref <classifier>
+        theta: !ref <theta>
         classifier: !ref <classifier>
     paths:
         embedding_model: !ref <embedding_model_path>
