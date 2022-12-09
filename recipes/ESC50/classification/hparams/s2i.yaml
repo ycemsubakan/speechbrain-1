@@ -26,13 +26,15 @@ output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
 
+log_wandb: True
+
 test_only: False
-save_interpretations: False
+save_interpretations: True
 limit_training_signal_len: True
-training_signal_len: 100000
+training_signal_len: 200000
 
 # Tensorboard logs
-use_tensorboard: True
+use_tensorboard: False
 tensorboard_logs_folder: !ref <output_folder>/tb_logs/
 
 # Path where data manifest files will be stored
@@ -57,7 +59,7 @@ base_lr: 0.00002
 max_lr: !ref <lr>
 step_size: 65000
 sample_rate: 44100
-interpret_period: 1
+interpret_period: 100
 
 device: "cuda"
 
@@ -86,6 +88,58 @@ dataloader_options:
 epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
 
+## Data augmentation
+
+augment_wavedrop: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+    sample_rate: !ref <sample_rate>
+    speeds: [100]
+
+augment_speed: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+    sample_rate: !ref <sample_rate>
+    speeds: [95, 100, 105]
+
+# add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 1.0
+#     noise_prob: 0.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
+
+# add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 0.0
+#     noise_prob: 1.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
+
+# add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
+#     openrir_folder: !ref <open_rir_folder>
+#     openrir_max_noise_len: 3.0  # seconds
+#     reverb_prob: 1.0
+#     noise_prob: 1.0
+#     noise_snr_low: 0
+#     noise_snr_high: 15
+#     rir_scale_factor: 1.0
+
+
+# Definition of the augmentation pipeline.
+# If concat_augment = False, the augmentation techniques are applied
+# in sequence. If concat_augment = True, all the augmented signals
+# # are concatenated in a single big batch.
+
+augment_pipeline: [
+    #!ref <augment_wavedrop>,
+    #!ref <augment_speed>,
+    #!ref <add_rev>,
+    #!ref <add_noise>,
+    #!ref <add_rev_noise>
+]
+concat_augment: True
+
 compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
         margin: 0.2
@@ -107,8 +161,8 @@ lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
 
-tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
-    save_dir: !ref <tensorboard_logs_folder>
+    #tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+    #save_dir: !ref <tensorboard_logs_folder>
 
 error_stats: !name:speechbrain.utils.metric_stats.MetricStats
     metric: !name:speechbrain.nnet.losses.classification_error
@@ -158,7 +212,7 @@ pretrained_esc50: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
         embedding_model: !ref <embedding_model>
-        theta: !ref <classifier>
+        theta: !ref <theta>
         classifier: !ref <classifier>
     paths:
         embedding_model: !ref <embedding_model_path>
