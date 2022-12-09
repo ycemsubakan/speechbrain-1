@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import speechbrain as sb
+# import speechbrain as sb
 from speechbrain.lobes.models.dual_path import (
     Encoder,
     SBTransformerBlock,
@@ -26,11 +26,11 @@ class Psi(nn.Module):
             stride=2,
             padding=1,
         )
-        #self.bn = nn.BatchNorm2d(in_embed_dims[1])
+        # self.bn = nn.BatchNorm2d(in_embed_dims[1])
         self.relu = nn.ReLU()
 
         self.out = nn.Linear(in_embed_dims[0] * 2, n_comp)
-        #self.out_bn = nn.BatchNorm1d(n_comp)
+        # self.out_bn = nn.BatchNorm1d(n_comp)
 
     def forward(self, f_i):
         batch_size = f_i[0].shape[0]
@@ -38,13 +38,13 @@ class Psi(nn.Module):
         x3 = self.relu(self.conv_1(f_i[2]))
 
         comb = torch.cat(
-                (
-                    F.adaptive_avg_pool2d(x3, (1, 1)),
-                    F.adaptive_avg_pool2d(f_i[1], (1, 1)),
-                    F.adaptive_avg_pool2d(f_i[0], (1, 1))
-                ),
-                dim=1
-            )
+            (
+                F.adaptive_avg_pool2d(x3, (1, 1)),
+                F.adaptive_avg_pool2d(f_i[1], (1, 1)),
+                F.adaptive_avg_pool2d(f_i[0], (1, 1)),
+            ),
+            dim=1,
+        )
         comb = comb.view(batch_size, -1)
 
         psi_out = self.out(comb).view(2, batch_size, -1, 1)
@@ -54,7 +54,14 @@ class Psi(nn.Module):
 
 class SepDecoder(nn.Module):
     def __init__(
-        self, enc_kernel_size=16, enc_outchannels=256, out_channels=256, d_ffn=1024, nhead=8, num_layers_tb=8
+        self,
+        enc_kernel_size=16,
+        enc_outchannels=256,
+        out_channels=256,
+        d_ffn=1024,
+        nhead=8,
+        num_layers_tb=8,
+        num_spks=2,
     ):
         """
         Implements decoding to generate interpretation from raw audio input
@@ -88,7 +95,7 @@ class SepDecoder(nn.Module):
         )
 
         self.masknet = Dual_Path_Model(
-            num_spks=2,
+            num_spks=num_spks,
             in_channels=enc_outchannels,
             out_channels=out_channels,
             num_layers=2,
@@ -125,7 +132,7 @@ class SepDecoder(nn.Module):
         self._check_shapes(mix_w, psi_out[1])
 
         # condition with psi_out
-        #mix_w = mix_w * psi_out[0] + psi_out[1]
+        # mix_w = mix_w * psi_out[0] + psi_out[1]
 
         # generates masks for garbage and interpretation
         est_mask = self.masknet(mix_w)

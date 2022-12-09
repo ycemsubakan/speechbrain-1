@@ -21,7 +21,7 @@ audio_data_folder: !ref <data_folder>/audio
 # files (mono channel and config SR) to train on
 #reasmpled_audio_data_folder: !ref <data_folder>/audio_mono16kHz
 #
-experiment_name: L2I
+experiment_name: S2I
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
