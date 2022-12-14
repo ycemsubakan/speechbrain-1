@@ -1,0 +1,170 @@
+# #################################
+# Basic training parameters for sound classification using the ESC50 dataset.
+# This recipe uses the ecapa-tdnn backbone for classification.
+#
+# Author:
+#  * Cem Subakan
+#  (based on the SpeechBrain UrbanSound8k recipe)
+# #################################
+
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 1234
+__set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
+
+# Set up folders for reading from and writing to
+# data_folder: !PLACEHOLDER # e.g., /localscratch/UrbanSound8K
+
+# TODO the follwing folder will contain the resampled audio
+# files (mono channel and config SR) to train on
+#
+experiment_name: S2I-mnist
+output_folder: !ref ./results/<experiment_name>/<seed>
+save_folder: !ref <output_folder>/save
+train_log: !ref <output_folder>/train_log.txt
+
+test_only: False
+save_interpretations: False
+limit_training_signal_len: True
+training_signal_len: 100000
+num_spks: 4
+
+# Tensorboard logs
+use_tensorboard: True
+tensorboard_logs_folder: !ref <output_folder>/tb_logs/
+
+
+# To standardize results, UrbanSound8k has pre-separated samples into
+# 10 folds for multi-fold validation
+train_fold_nums: [1, 2, 3]
+valid_fold_nums: [4]
+test_fold_nums: [5]
+skip_manifest_creation: False
+
+ckpt_interval_minutes: 15 # save checkpoint every N min
+
+# Training parameters
+number_of_epochs: 200
+batch_size: 1
+lr: 0.0001
+base_lr: 0.00002
+max_lr: !ref <lr>
+step_size: 65000
+sample_rate: 44100
+interpret_period: 1
+
+device: "cuda"
+
+# Feature parameters
+n_mels: 80
+left_frames: 0
+right_frames: 0
+deltas: False
+amp_to_db: True
+normalize: True
+
+# Number of classes
+out_n_neurons: 10
+
+# Note that it's actually important to shuffle the data here
+# (or at the very least, not sort the data by duration)
+# Also note that this does not violate the UrbanSound8k "no-shuffle" policy
+# because this does not mix samples from folds in train to valid/test, only
+# within train or valid, or test
+shuffle: True
+dataloader_options:
+    batch_size: !ref <batch_size>
+    shuffle: !ref <shuffle>
+    num_workers: 0
+
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+# compute_error: !name:speechbrain.nnet.losses.classification_error
+
+opt_class: !name:torch.optim.Adam
+    lr: !ref <lr>
+    weight_decay: 0.000002
+
+
+lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
+    factor: 0.5
+    patience: 3
+    dont_halve_until_epoch: 50
+
+# Logging + checkpoints
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+    save_dir: !ref <tensorboard_logs_folder>
+
+error_stats: !name:speechbrain.utils.metric_stats.MetricStats
+    metric: !name:speechbrain.nnet.losses.classification_error
+        reduction: batch
+
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        counter: !ref <epoch_counter>
+        classifier: !ref <classifier>
+
+# Model and pre-processing
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+    std_norm: False
+
+
+classifier: !new:custom_models.MNISTNet
+    
+theta: !new:custom_models.Theta_sep
+    n_comp: !ref <num_spks>
+
+    #  theta: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
+    #      input_size: 2048
+    #      out_neurons: !ref <out_n_neurons>
+    #      lin_blocks: 1
+
+embedding_model_path: cemsubakan/cnn14-esc50/embedding_model_esc50ft.ckpt
+classifier_model_path: cemsubakan/cnn14-esc50/classifier_esc50.ckpt
+pretrained_esc50: !new:speechbrain.utils.parameter_transfer.Pretrainer
+    collect_in: !ref <save_folder>
+    loadables:
+        theta: !ref <classifier>
+        classifier: !ref <classifier>
+    paths:
+        theta: !ref <classifier_model_path>
+        classifier: !ref <classifier_model_path>
+
+# Interpretation hyperparams
+T: 413
+K: 100
+FREQ: 513
+
+# pre-processing
+n_fft: 1024
+spec_mag_power: 0.5
+hop_length: 11.6099
+win_length: 23.2199
+
+enc_dim: 512
+psi_model: !new:custom_models.Psi
+    n_comp: !ref <enc_dim>
+
+# Decoder
+decoder: !new:custom_models.SepDecoder
+    enc_kernel_size: 16
+    d_ffn: 1024
+    nhead: 4
+    num_layers_tb: 4
+    return_masks: True
+    num_spks: !ref <num_spks>
+
+alpha: 10 # applied to NMF loss
+beta: 0.8 # L1 regularization to time activations
+k_fidelity: 3 # top-k fidelity
+
+modules:
+    classifier: !ref <classifier>
+    mean_var_norm: !ref <mean_var_norm>
+    psi: !ref <psi_model>
+    decoder: !ref <decoder>
