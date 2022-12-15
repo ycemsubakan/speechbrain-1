@@ -59,17 +59,16 @@ class MNISTIntBrain(sb.core.Brain):
 
         if self.hparams.use_vq:
             xhat, hcat, z_q_x = self.hparams.psi_model(hs, class_pred)
-        else: 
+        else:
             xhat, hcat = self.hparams.psi_model(hs, class_pred)
             z_q_x = None
 
-        if hasattr(self.hparams, 'separator'):
+        if hasattr(self.hparams, "separator"):
             garbage = self.hparams.separator(images)
         else:
             garbage = 0
 
         return pred, xhat, hcat, z_q_x, garbage
-
 
     def compute_objectives(self, predictions, batch, stage):
         """Computes the loss using class-id as label.
@@ -85,10 +84,16 @@ class MNISTIntBrain(sb.core.Brain):
         loss = F.nll_loss(predictions, labels)
 
         # if there is a separator, we need to add sigmoid to the sum
-        if hasattr(self.hparams, 'separator'):
+        if hasattr(self.hparams, "separator"):
             xhat = F.sigmoid(xhat + garbage)
 
-            loss_fid = (-torch.exp(predictions - torch.logsumexp(predictions, dim=1, keepdim=True)) * self.hparams.classifier(xhat)[0]).mean()
+            loss_fid = (
+                -torch.exp(
+                    predictions
+                    - torch.logsumexp(predictions, dim=1, keepdim=True)
+                )
+                * self.hparams.classifier(xhat)[0]
+            ).mean()
         else:
             xhat = F.sigmoid(xhat)
             loss_fid = 0
@@ -97,11 +102,11 @@ class MNISTIntBrain(sb.core.Brain):
             -images * torch.log(xhat + EPS)
             - (1 - images) * torch.log(1 - xhat + EPS)
         ).mean()
-        if self.hparams.use_vq: 
+        if self.hparams.use_vq:
             loss_vq = F.mse_loss(z_q_x, hcat.detach())
             loss_commit = F.mse_loss(hcat, z_q_x.detach())
-        else: 
-            loss_vq = 0 
+        else:
+            loss_vq = 0
             loss_commit = 0
 
         # Concatenate labels (due to data augmentation)

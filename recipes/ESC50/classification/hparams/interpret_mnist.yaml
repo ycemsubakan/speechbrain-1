@@ -121,7 +121,7 @@ theta: !new:custom_models.Theta_sep
     n_comp: !ref <num_spks>
 
 separator: !new:custom_models.MNISTSeparator
-    
+
 
     #  theta: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     #      input_size: 2048

@@ -267,7 +267,7 @@ class PsiMNIST(nn.Module):
         hconv = hcat
 
         xhat = self.convt1x1(hconv)
-        #xhat = torch.sigmoid(xhat)
+        # xhat = torch.sigmoid(xhat)
         return xhat, hcat
 
 
@@ -438,16 +438,15 @@ class MNISTSeparator(nn.Module):
         super().__init__()
 
         self.encoder = nn.Sequential(
-           nn.Conv2d(1, dim, 3, padding='same'),
-           ResBlock(dim),
-           ResBlock(dim),
-           nn.Conv2d(dim, 1, 3, padding='same'),
+            nn.Conv2d(1, dim, 3, padding="same"),
+            ResBlock(dim),
+            ResBlock(dim),
+            nn.Conv2d(dim, 1, 3, padding="same"),
         )
 
     def forward(self, x):
-        xhat = (self.encoder(x))
+        xhat = self.encoder(x)
         return xhat
-
 
 
 if __name__ == "__main__":
