@@ -85,15 +85,15 @@ class MNISTIntBrain(sb.core.Brain):
 
         # if there is a separator, we need to add sigmoid to the sum
         if hasattr(self.hparams, "separator"):
-            xhat = F.sigmoid(xhat + garbage)
 
             loss_fid = (
                 -torch.exp(
                     predictions
                     - torch.logsumexp(predictions, dim=1, keepdim=True)
                 )
-                * self.hparams.classifier(xhat)[0]
+                * self.hparams.classifier(F.sigmoid(xhat))[0]
             ).mean()
+            xhat = F.sigmoid(xhat + garbage)
         else:
             xhat = F.sigmoid(xhat)
             loss_fid = 0
