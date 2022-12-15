@@ -148,12 +148,18 @@ class SepDecoder(nn.Module):
         # generates masks for garbage and interpretation
         est_mask = self.masknet(mix_w)
 
-        mix_w = torch.stack([mix_w] * self.num_spks)  # stack to avoid broadcasting errors
+        mix_w = torch.stack(
+            [mix_w] * self.num_spks
+        )  # stack to avoid broadcasting errors
         sep_h = mix_w * est_mask
 
         # decode from latent space to time domain
         est_source = torch.cat(
-            [self.decoder(sep_h[i]).unsqueeze(-1) for i in range(self.num_spks)], dim=-1
+            [
+                self.decoder(sep_h[i]).unsqueeze(-1)
+                for i in range(self.num_spks)
+            ],
+            dim=-1,
         )
 
         # T changed after conv1d in encoder, fix it here
@@ -168,7 +174,6 @@ class SepDecoder(nn.Module):
             return est_source, sep_h
         else:
             return est_source
-
 
 
 class Theta_sep(nn.Module):
@@ -187,7 +192,7 @@ class Theta_sep(nn.Module):
 
         masks_pooled = masks.mean(-1)
 
-        #theta_out = self.hard_att(masks_pooled).squeeze(2)
+        # theta_out = self.hard_att(masks_pooled).squeeze(2)
         theta_out = masks_pooled.squeeze(2)
         # print(theta_out.shape)
         # input()
@@ -195,7 +200,6 @@ class Theta_sep(nn.Module):
         # print(theta_out.shape)
         # input()
         return theta_out
-
 
 
 class MNISTNet(nn.Module):
@@ -217,7 +221,7 @@ class MNISTNet(nn.Module):
         x = self.conv2(x)
         x = F.relu(x)
         x = F.max_pool2d(x, 2)
-        hs.append(x) 
+        hs.append(x)
         x = self.dropout1(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
@@ -226,7 +230,6 @@ class MNISTNet(nn.Module):
         x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
         return output, hs
-
 
 
 class PsiMNIST(nn.Module):
@@ -238,56 +241,41 @@ class PsiMNIST(nn.Module):
         the decoder expects two tensors of shape (B, C, 1) -- C=256 for now.
         """
         self.convt1 = nn.ConvTranspose2d(
-            64,
-            32,
-            kernel_size=6,
-            stride=2,
-            padding=0,
+            64, 32, kernel_size=6, stride=2, padding=0,
         )
         self.convt2 = nn.ConvTranspose2d(
-            32,
-            32,
-            kernel_size=3,
-            stride=1,
-            padding=0,
+            32, 32, kernel_size=3, stride=1, padding=0,
         )
-        #self.conv1 = nn.Conv2d(
+        # self.conv1 = nn.Conv2d(
         #    64,
         #    64,
         #    kernel_size=3,
         #    stride=1,
         #    padding='same',
-        #)
-        self.convt1x1 = nn.Conv2d(
-            64,
-            1,
-            kernel_size=1,
-            stride=1,
-            padding=0
-        )
+        # )
+        self.convt1x1 = nn.Conv2d(64, 1, kernel_size=1, stride=1, padding=0)
 
-    def forward(self, hs):
+    def forward(self, hs, labels=None):
         h2up = self.convt1(hs[1])
-        #h2up = F.relu(h2up)
+        # h2up = F.relu(h2up)
         h1up = self.convt2(hs[0])
-        #h1up = F.relu(h1up)
+        # h1up = F.relu(h1up)
 
-        hcat = torch.cat([h2up, h1up], dim=1) 
-        #hconv = self.conv1(hcat)
-        #hconv = F.relu(hcat)
+        hcat = torch.cat([h2up, h1up], dim=1)
+        # hconv = self.conv1(hcat)
+        # hconv = F.relu(hcat)
         hconv = hcat
 
         xhat = self.convt1x1(hconv)
-        xhat = torch.sigmoid(xhat)
-        return xhat
-
+        #xhat = torch.sigmoid(xhat)
+        return xhat, hcat
 
 
 class VQEmbedding(nn.Module):
     def __init__(self, K, D, numclasses=10):
         super().__init__()
         self.embedding = nn.Embedding(K, D)
-        self.embedding.weight.data.uniform_(-1./K, 1./K)
+        self.embedding.weight.data.uniform_(-1.0 / K, 1.0 / K)
         self.numclasses = numclasses
 
     def forward(self, z_e_x):
@@ -297,11 +285,14 @@ class VQEmbedding(nn.Module):
 
     def straight_through(self, z_e_x, labels=None):
         z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
-        z_q_x_, indices = vq_st(z_e_x_, self.embedding.weight.detach(), labels, self.numclasses)
+        z_q_x_, indices = vq_st(
+            z_e_x_, self.embedding.weight.detach(), labels, self.numclasses
+        )
         z_q_x = z_q_x_.permute(0, 3, 1, 2).contiguous()
 
-        z_q_x_bar_flatten = torch.index_select(self.embedding.weight,
-            dim=0, index=indices)
+        z_q_x_bar_flatten = torch.index_select(
+            self.embedding.weight, dim=0, index=indices
+        )
         z_q_x_bar_ = z_q_x_bar_flatten.view_as(z_e_x_)
         z_q_x_bar = z_q_x_bar_.permute(0, 3, 1, 2).contiguous()
 
@@ -317,7 +308,7 @@ class ResBlock(nn.Module):
             nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.Conv2d(dim, dim, 1),
-            nn.BatchNorm2d(dim)
+            nn.BatchNorm2d(dim),
         )
 
     def forward(self, x):
@@ -346,7 +337,7 @@ class VectorQuantizedVAE(nn.Module):
             nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, input_dim, 4, 2, 1),
-            nn.Tanh()
+            nn.Tanh(),
         )
 
         self.apply(weights_init)
@@ -357,7 +348,9 @@ class VectorQuantizedVAE(nn.Module):
         return latents
 
     def decode(self, latents):
-        z_q_x = self.codebook.embedding(latents).permute(0, 3, 1, 2)  # (B, D, H, W)
+        z_q_x = self.codebook.embedding(latents).permute(
+            0, 3, 1, 2
+        )  # (B, D, H, W)
         x_tilde = self.decoder(z_q_x)
         return x_tilde
 
@@ -370,7 +363,7 @@ class VectorQuantizedVAE(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
+    if classname.find("Conv") != -1:
         try:
             nn.init.xavier_uniform_(m.weight.data)
             m.bias.data.fill_(0)
@@ -378,40 +371,21 @@ def weights_init(m):
             print("Skipping initialization of ", classname)
 
 
-
 class VectorQuantizedPSI(nn.Module):
     def __init__(self, dim=256, K=512):
         super().__init__()
-        #self.encoder = nn.Sequential(
+        # self.encoder = nn.Sequential(
         #    nn.Conv2d(input_dim, dim, 4, 2, 1),
         #    nn.BatchNorm2d(dim),
         #    nn.ReLU(True),
         #    nn.Conv2d(dim, dim, 4, 2, 1),
         #    ResBlock(dim),
         #    ResBlock(dim),
-        #)
+        # )
 
-        self.conv1 = nn.Conv2d(
-            64,
-            128,
-            kernel_size=3,
-            stride=2,
-            padding=2,
-        )
-        self.conv2 = nn.Conv2d(
-            32,
-            64,
-            kernel_size=3,
-            stride=2,
-            padding=0,
-        )
-        self.conv3 = nn.Conv2d(
-            64,
-            128,
-            kernel_size=3,
-            stride=2,
-            padding=2,
-        )
+        self.conv1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=0,)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
 
         self.codebook = VQEmbedding(K, dim)
 
@@ -423,7 +397,7 @@ class VectorQuantizedPSI(nn.Module):
             nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, 1, 4, 2, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
         self.apply(weights_init)
@@ -434,7 +408,9 @@ class VectorQuantizedPSI(nn.Module):
         return latents
 
     def decode(self, latents):
-        z_q_x = self.codebook.embedding(latents).permute(0, 3, 1, 2)  # (B, D, H, W)
+        z_q_x = self.codebook.embedding(latents).permute(
+            0, 3, 1, 2
+        )  # (B, D, H, W)
         x_tilde = self.decoder(z_q_x)
         return x_tilde
 
@@ -443,18 +419,34 @@ class VectorQuantizedPSI(nn.Module):
         h1 = F.relu(h1)
         h3 = self.conv3(h1)
         h3 = F.relu(h3)
-        #h2up = F.relu(h2up)
+        # h2up = F.relu(h2up)
 
         h2 = self.conv1(hs[1])
         h2 = F.relu(h2)
-        #h1up = F.relu(h1up)
+        # h1up = F.relu(h1up)
 
-        hcat = torch.cat([h2, h3], dim=1) 
+        hcat = torch.cat([h2, h3], dim=1)
 
-        #z_e_x = self.encoder(hcat)
+        # z_e_x = self.encoder(hcat)
         z_q_x_st, z_q_x = self.codebook.straight_through(hcat, labels)
         x_tilde = self.decoder(z_q_x_st)
         return x_tilde, hcat, z_q_x
+
+
+class MNISTSeparator(nn.Module):
+    def __init__(self, dim=128):
+        super().__init__()
+
+        self.encoder = nn.Sequential(
+           nn.Conv2d(1, dim, 3, padding='same'),
+           ResBlock(dim),
+           ResBlock(dim),
+           nn.Conv2d(dim, 1, 3, padding='same'),
+        )
+
+    def forward(self, x):
+        xhat = (self.encoder(x))
+        return xhat
 
 
 

@@ -115,7 +115,7 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 
 
 classifier: !new:custom_models.MNISTNet
-    
+
 theta: !new:custom_models.Theta_sep
     n_comp: !ref <num_spks>
 

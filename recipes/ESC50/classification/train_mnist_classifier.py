@@ -49,7 +49,7 @@ class MNISTBrain(sb.core.Brain):
         """
         images = batch[0].to(self.device)
 
-        pred,_ = self.hparams.classifier(images)
+        pred, _ = self.hparams.classifier(images)
         return pred
 
     def compute_objectives(self, predictions, batch, stage):
@@ -69,9 +69,7 @@ class MNISTBrain(sb.core.Brain):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
         # Append this batch of losses to the loss metric for easy
-        self.loss_metric.append(
-            uttid, predictions, labels, reduce=False
-        )
+        self.loss_metric.append(uttid, predictions, labels, reduce=False)
 
         # Confusion matrices
         if stage != sb.Stage.TRAIN:
@@ -97,15 +95,13 @@ class MNISTBrain(sb.core.Brain):
             `None` during the test stage.
         """
         # Set up statistics trackers for this stage
-        self.loss_metric = sb.utils.metric_stats.MetricStats(
-            metric=F.nll_loss
-        )
+        self.loss_metric = sb.utils.metric_stats.MetricStats(metric=F.nll_loss)
 
         # Compute Accuracy using MetricStats
         # Define function taking (prediction, target, length) for eval
         def accuracy_value(predict, target, lengths):
             """Computes Accuracy"""
-            preds = predict.argmax(-1) 
+            preds = predict.argmax(-1)
             nbr_correct = (preds == target).sum()
             nbr_total = target.shape[0]
 
@@ -128,7 +124,6 @@ class MNISTBrain(sb.core.Brain):
                 dtype=int,
             )
 
-        
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """Gets called at the end of an epoch.
 
@@ -170,9 +165,10 @@ class MNISTBrain(sb.core.Brain):
 
         # Perform end-of-iteration things, like annealing, logging, etc.
         if stage == sb.Stage.VALID:
-            old_lr, new_lr = self.hparams.lr_annealing([self.optimizer], epoch, current_loss=stage_loss)
+            old_lr, new_lr = self.hparams.lr_annealing(
+                [self.optimizer], epoch, current_loss=stage_loss
+            )
             sb.nnet.schedulers.update_learning_rate(self.optimizer, new_lr)
-
 
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
@@ -320,21 +316,26 @@ if __name__ == "__main__":
             hparams["tensorboard_logs_folder"]
         )
 
-    lam = lambda x: torch.clamp(x, 0, 1)  
-    train_kwargs = {'batch_size': 64}
-    test_kwargs = {'batch_size': 64}
-    transform=transforms.Compose([
+    lam = lambda x: torch.clamp(x, 0, 1)
+    train_kwargs = {"batch_size": 64}
+    test_kwargs = {"batch_size": 64}
+    transform = transforms.Compose(
+        [
             transforms.ToTensor(),
             transforms.Lambda(lam)
-            #transforms.Normalize((0.1307,), (0.3081,))
-            ])
-    mnist_train = torchvision.datasets.MNIST(root='.', download='True', transform=transform)
-    mnist_valid = torchvision.datasets.MNIST(root='.', download='True', train=False, transform=transform)
+            # transforms.Normalize((0.1307,), (0.3081,))
+        ]
+    )
+    mnist_train = torchvision.datasets.MNIST(
+        root=".", download="True", transform=transform
+    )
+    mnist_valid = torchvision.datasets.MNIST(
+        root=".", download="True", train=False, transform=transform
+    )
     train_loader = torch.utils.data.DataLoader(mnist_train, **train_kwargs)
     valid_loader = torch.utils.data.DataLoader(mnist_valid, **test_kwargs)
 
     # Dataset IO prep: creating Dataset objects and proper encodings for phones
-
 
     mnistbrain = MNISTBrain(
         modules=hparams["modules"],
@@ -345,7 +346,7 @@ if __name__ == "__main__":
     )
 
     if not hparams["test_only"]:
-        mnistbrain.fit( 
+        mnistbrain.fit(
             epoch_counter=mnistbrain.hparams.epoch_counter,
             train_set=train_loader,
             valid_set=valid_loader,

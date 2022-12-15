@@ -31,6 +31,7 @@ num_spks: 4
 # Tensorboard logs
 use_tensorboard: True
 tensorboard_logs_folder: !ref <output_folder>/tb_logs/
+use_vq: True
 
 
 # To standardize results, UrbanSound8k has pre-separated samples into
@@ -116,7 +117,7 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 
 
 classifier: !new:custom_models.MNISTNet
-    
+
 theta: !new:custom_models.Theta_sep
     n_comp: !ref <num_spks>
 

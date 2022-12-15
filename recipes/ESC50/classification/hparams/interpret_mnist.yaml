@@ -116,9 +116,12 @@ mean_var_norm: !new:speechbrain.processing.features.InputNormalization
 
 
 classifier: !new:custom_models.MNISTNet
-    
+
 theta: !new:custom_models.Theta_sep
     n_comp: !ref <num_spks>
+
+separator: !new:custom_models.MNISTSeparator
+    
 
     #  theta: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
     #      input_size: 2048
@@ -142,6 +145,7 @@ psi_model: !new:custom_models.PsiMNIST
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations
 k_fidelity: 3 # top-k fidelity
+use_vq: False
 
 
 classifier_model_path: '/data2/cloned_repos/speechbrain-cemfork/recipes/ESC50/classification/results/S2I-mnist/22/save/CKPT+2022-12-13+07-23-52+00/classifier.ckpt'
@@ -154,4 +158,5 @@ pretrained_mnist: !new:speechbrain.utils.parameter_transfer.Pretrainer
 
 modules:
     psi: !ref <psi_model>
+    separator: !ref <separator>
     # decoder: !ref <decoder>
