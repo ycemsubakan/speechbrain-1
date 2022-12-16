@@ -21,7 +21,14 @@ def get_irrelevant_regions(labels, K, num_classes):
 
 class VectorQuantization(Function):
     @staticmethod
-    def forward(ctx, inputs, codebook, labels=None, num_classes=10):
+    def forward(
+        ctx,
+        inputs,
+        codebook,
+        labels=None,
+        num_classes=10,
+        activate_class_partitioning=True,
+    ):
         with torch.no_grad():
             embedding_size = codebook.size(1)
             inputs_size = inputs.size()
@@ -47,7 +54,8 @@ class VectorQuantization(Function):
             )
 
             # intervene and boost the distances for irrelevant codes
-            distances[irrelevant_regions] = torch.inf
+            if activate_class_partitioning:
+                distances[irrelevant_regions] = torch.inf
 
             _, indices_flatten = torch.min(distances, dim=1)
             indices = indices_flatten.view(*inputs_size[:-1])
@@ -67,8 +75,17 @@ class VectorQuantization(Function):
 
 class VectorQuantizationStraightThrough(Function):
     @staticmethod
-    def forward(ctx, inputs, codebook, labels=None, num_classes=10):
-        indices = vq(inputs, codebook, labels, num_classes)
+    def forward(
+        ctx,
+        inputs,
+        codebook,
+        labels=None,
+        num_classes=10,
+        activate_class_partitioning=True,
+    ):
+        indices = vq(
+            inputs, codebook, labels, num_classes, activate_class_partitioning
+        )
         indices_flatten = indices.view(-1)
         ctx.save_for_backward(indices_flatten, codebook)
         ctx.mark_non_differentiable(indices_flatten)
@@ -81,7 +98,14 @@ class VectorQuantizationStraightThrough(Function):
         return (codes, indices_flatten)
 
     @staticmethod
-    def backward(ctx, grad_output, grad_indices, labels=None, num_classes=None):
+    def backward(
+        ctx,
+        grad_output,
+        grad_indices,
+        labels=None,
+        num_classes=None,
+        activate_class_partitioning=True,
+    ):
         grad_inputs, grad_codebook = None, None
 
         if ctx.needs_input_grad[0]:
@@ -98,7 +122,7 @@ class VectorQuantizationStraightThrough(Function):
             grad_codebook = torch.zeros_like(codebook)
             grad_codebook.index_add_(0, indices, grad_output_flatten)
 
-        return (grad_inputs, grad_codebook, None, None)
+        return (grad_inputs, grad_codebook, None, None, None)
 
 
 vq = VectorQuantization.apply

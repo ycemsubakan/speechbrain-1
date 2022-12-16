@@ -425,8 +425,8 @@ if __name__ == "__main__":
     )
 
     # for x, y in it.islice(valid_loader, 0, 1, 1):
-    #    _, xhat, _, _ = mnistbrain.compute_forward([x, y], 'test')
-    #    torchvision.utils.save_image(xhat, 'reconstructions.png')
+    #     _, xhat, _, _, _ = mnistbrain.compute_forward([x, y], 'test')
+    #     torchvision.utils.save_image(xhat, 'reconstructions.png')
 
     for x, y in it.islice(valid_loader, 0, 1, 1):
         mask = y == 0

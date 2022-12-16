@@ -140,6 +140,7 @@ win_length: 23.2199
 enc_dim: 512
 psi_model: !new:custom_models.VectorQuantizedPSI
     K: 64
+    activate_class_partitioning: True
 
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations
