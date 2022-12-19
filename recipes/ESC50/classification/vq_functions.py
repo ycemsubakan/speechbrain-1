@@ -3,6 +3,7 @@ from torch.autograd import Function
 
 
 def get_irrelevant_regions(labels, K, num_classes, N_shared=5):
+    stage = "TRAIN"
     # we can make this more uniform
     uniform_mat = torch.round(
             torch.linspace(-0.5, num_classes - 0.51, K - N_shared)
@@ -14,10 +15,16 @@ def get_irrelevant_regions(labels, K, num_classes, N_shared=5):
 
     irrelevant_regions = uniform_mat != labels_expanded
 
-    irrelevant_regions = torch.cat(
-            [irrelevant_regions, torch.ones(irrelevant_regions.shape[0], N_shared)],
-            dim=1
-    ) == 1
+    if stage == "TRAIN":
+        irrelevant_regions = torch.cat(
+                [irrelevant_regions, torch.ones(irrelevant_regions.shape[0], N_shared).to(labels.device)],
+                dim=1
+        ) == 1
+    else:
+        irrelevant_regions = torch.cat(
+                [irrelevant_regions, torch.zeros(irrelevant_regions.shape[0], N_shared).to(labels.device)],
+                dim=1
+        ) == 1
 
     return irrelevant_regions
 
