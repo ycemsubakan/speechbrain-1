@@ -2,21 +2,24 @@ import torch
 from torch.autograd import Function
 
 
-def get_irrelevant_regions(labels, K, num_classes):
+def get_irrelevant_regions(labels, K, num_classes, N_shared=5):
     # we can make this more uniform
-    uniform_mat = torch.round(torch.linspace(-0.5, num_classes - 0.51, K)).to(
-        labels.device
-    )
+    uniform_mat = torch.round(
+            torch.linspace(-0.5, num_classes - 0.51, K - N_shared)
+    ).to(labels.device)
 
     uniform_mat = uniform_mat.unsqueeze(0).repeat(labels.shape[0], 1)
 
-    labels_expanded = labels.unsqueeze(1).repeat(1, K)
+    labels_expanded = labels.unsqueeze(1).repeat(1, K - N_shared)
 
     irrelevant_regions = uniform_mat != labels_expanded
 
-    return irrelevant_regions
+    irrelevant_regions = torch.cat(
+            [irrelevant_regions, torch.ones(irrelevant_regions.shape[0], N_shared)],
+            dim=1
+    ) == 1
 
-    pass
+    return irrelevant_regions
 
 
 class VectorQuantization(Function):

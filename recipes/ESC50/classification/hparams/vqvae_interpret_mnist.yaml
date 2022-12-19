@@ -53,7 +53,7 @@ step_size: 65000
 sample_rate: 44100
 interpret_period: 1
 
-device: "cuda"
+device: "cpu"
 
 # Feature parameters
 n_mels: 80
@@ -147,7 +147,7 @@ beta: 0.8 # L1 regularization to time activations
 k_fidelity: 3 # top-k fidelity
 
 
-classifier_model_path: '/data2/cloned_repos/speechbrain-cemfork/recipes/ESC50/classification/results/S2I-mnist/22/save/CKPT+2022-12-13+07-23-52+00/classifier.ckpt'
+classifier_model_path: 'results/S2I-mnist/1234/save/CKPT+2022-12-19+11-46-34+00/classifier.ckpt'
 pretrained_mnist: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
