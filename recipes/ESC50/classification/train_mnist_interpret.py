@@ -408,6 +408,10 @@ if __name__ == "__main__":
             valid_loader_kwargs=hparams["dataloader_options"],
         )
 
+
+    for m in mnistbrain.modules:
+        mnistbrain.modules[m].eval()
+
     # for x, y in it.islice(train_loader, 0, 1, 1):
     #    _, xhat, _, _ = mnistbrain.compute_forward([x, y], 'test')
     # torchvision.utils.save_image(xhat, 'notrreconstructions.png')
