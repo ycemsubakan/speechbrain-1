@@ -2,21 +2,30 @@ import torch
 from torch.autograd import Function
 
 
-def get_irrelevant_regions(labels, K, num_classes):
+def get_irrelevant_regions(labels, K, num_classes, N_shared=5, stage="TRAIN"):
     # we can make this more uniform
-    uniform_mat = torch.round(torch.linspace(-0.5, num_classes - 0.51, K)).to(
-        labels.device
-    )
+    uniform_mat = torch.round(
+            torch.linspace(-0.5, num_classes - 0.51, K - N_shared)
+    ).to(labels.device)
 
     uniform_mat = uniform_mat.unsqueeze(0).repeat(labels.shape[0], 1)
 
-    labels_expanded = labels.unsqueeze(1).repeat(1, K)
+    labels_expanded = labels.unsqueeze(1).repeat(1, K - N_shared)
 
     irrelevant_regions = uniform_mat != labels_expanded
 
-    return irrelevant_regions
+    if stage == "TRAIN":
+        irrelevant_regions = torch.cat(
+                [irrelevant_regions, torch.ones(irrelevant_regions.shape[0], N_shared).to(labels.device)],
+                dim=1
+        ) == 1
+    else:
+        irrelevant_regions = torch.cat(
+                [irrelevant_regions, torch.zeros(irrelevant_regions.shape[0], N_shared).to(labels.device)],
+                dim=1
+        ) == 1
 
-    pass
+    return irrelevant_regions
 
 
 class VectorQuantization(Function):
@@ -28,6 +37,8 @@ class VectorQuantization(Function):
         labels=None,
         num_classes=10,
         activate_class_partitioning=True,
+        shared_keys=10,
+        training=True
     ):
         with torch.no_grad():
             embedding_size = codebook.size(1)
@@ -38,7 +49,11 @@ class VectorQuantization(Function):
             labels_flatten = labels_expanded.reshape(-1)
 
             irrelevant_regions = get_irrelevant_regions(
-                labels_flatten, codebook.shape[0], num_classes
+                labels_flatten,
+                codebook.shape[0],
+                num_classes,
+                N_shared=shared_keys,
+                stage="TRAIN" if training else "VALID"
             )
 
             codebook_sqr = torch.sum(codebook ** 2, dim=1)
@@ -82,9 +97,17 @@ class VectorQuantizationStraightThrough(Function):
         labels=None,
         num_classes=10,
         activate_class_partitioning=True,
+        shared_keys=10,
+        training=True
     ):
         indices = vq(
-            inputs, codebook, labels, num_classes, activate_class_partitioning
+            inputs,
+            codebook,
+            labels,
+            num_classes,
+            activate_class_partitioning,
+            shared_keys,
+            training
         )
         indices_flatten = indices.view(-1)
         ctx.save_for_backward(indices_flatten, codebook)
@@ -105,6 +128,8 @@ class VectorQuantizationStraightThrough(Function):
         labels=None,
         num_classes=None,
         activate_class_partitioning=True,
+        shared_keys=10,
+        training=True
     ):
         grad_inputs, grad_codebook = None, None
 
@@ -122,7 +147,7 @@ class VectorQuantizationStraightThrough(Function):
             grad_codebook = torch.zeros_like(codebook)
             grad_codebook.index_add_(0, indices, grad_output_flatten)
 
-        return (grad_inputs, grad_codebook, None, None, None)
+        return (grad_inputs, grad_codebook, None, None, None, None, None)
 
 
 vq = VectorQuantization.apply
