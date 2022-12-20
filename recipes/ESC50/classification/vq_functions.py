@@ -16,8 +16,6 @@ def get_irrelevant_regions(labels, K, num_classes):
 
     return irrelevant_regions
 
-    pass
-
 
 class VectorQuantization(Function):
     @staticmethod

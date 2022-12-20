@@ -128,7 +128,7 @@ theta: !new:custom_models.Theta_sep
 
 # Interpretation hyperparams
 T: 413
-K: 100
+K: 128
 FREQ: 513
 
 # pre-processing
@@ -138,9 +138,10 @@ hop_length: 11.6099
 win_length: 23.2199
 
 enc_dim: 512
+activate_class_partitioning: True
 psi_model: !new:custom_models.VectorQuantizedPSI
-    K: 64
-    activate_class_partitioning: True
+    K: !ref <K>
+    activate_class_partitioning: !ref <activate_class_partitioning>
 
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations

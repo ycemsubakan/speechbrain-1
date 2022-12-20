@@ -275,7 +275,17 @@ class VQEmbedding(nn.Module):
     def __init__(self, K, D, numclasses=10, activate_class_partitioning=True):
         super().__init__()
         self.embedding = nn.Embedding(K, D)
+
+        uniform_mat = torch.round(
+            torch.linspace(-0.5, numclasses - 0.51, K)
+        ).unsqueeze(
+            1
+        )  # .to(self.embedding.device) * 5
+        uniform_mat = uniform_mat.repeat(1, D)
+
         self.embedding.weight.data.uniform_(-1.0 / K, 1.0 / K)
+        self.embedding.weight.data += uniform_mat
+
         self.numclasses = numclasses
         self.activate_class_partitioning = activate_class_partitioning
 
