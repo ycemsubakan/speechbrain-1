@@ -17,7 +17,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # TODO the follwing folder will contain the resampled audio
 # files (mono channel and config SR) to train on
 #
-experiment_name: vqvae-mnist-int
+experiment_name: shared_vqvae-mnist-int
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
 train_log: !ref <output_folder>/train_log.txt
@@ -29,7 +29,7 @@ training_signal_len: 100000
 num_spks: 4
 
 # Tensorboard logs
-use_tensorboard: True
+use_tensorboard: False
 tensorboard_logs_folder: !ref <output_folder>/tb_logs/
 use_vq: True
 
@@ -53,7 +53,7 @@ step_size: 65000
 sample_rate: 44100
 interpret_period: 1
 
-device: "cuda"
+device: "cpu"
 
 # Feature parameters
 n_mels: 80
@@ -96,8 +96,8 @@ lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
     save_file: !ref <train_log>
 
-tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
-    save_dir: !ref <tensorboard_logs_folder>
+# tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+#     save_dir: !ref <tensorboard_logs_folder>
 
 error_stats: !name:speechbrain.utils.metric_stats.MetricStats
     metric: !name:speechbrain.nnet.losses.classification_error
@@ -142,13 +142,14 @@ activate_class_partitioning: True
 psi_model: !new:custom_models.VectorQuantizedPSI
     K: !ref <K>
     activate_class_partitioning: !ref <activate_class_partitioning>
+    shared_keys: 5
 
 alpha: 10 # applied to NMF loss
 beta: 0.8 # L1 regularization to time activations
 k_fidelity: 3 # top-k fidelity
 
 
-classifier_model_path: '/data2/cloned_repos/speechbrain-cemfork/recipes/ESC50/classification/results/S2I-mnist/22/save/CKPT+2022-12-13+07-23-52+00/classifier.ckpt'
+classifier_model_path: 'results/S2I-mnist/1234/save/CKPT+2022-12-19+11-46-34+00/classifier.ckpt'
 pretrained_mnist: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:

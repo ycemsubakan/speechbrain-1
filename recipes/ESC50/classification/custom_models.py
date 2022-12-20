@@ -272,7 +272,14 @@ class PsiMNIST(nn.Module):
 
 
 class VQEmbedding(nn.Module):
-    def __init__(self, K, D, numclasses=10, activate_class_partitioning=True):
+    def __init__(
+        self,
+        K,
+        D,
+        numclasses=10,
+        activate_class_partitioning=True,
+        shared_keys=10,
+    ):
         super().__init__()
         self.embedding = nn.Embedding(K, D)
 
@@ -288,10 +295,11 @@ class VQEmbedding(nn.Module):
 
         self.numclasses = numclasses
         self.activate_class_partitioning = activate_class_partitioning
+        self.shared_keys = shared_keys
 
     def forward(self, z_e_x):
         z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
-        latents = vq(z_e_x_, self.embedding.weight)
+        latents = vq(z_e_x_, self.embedding.weight, training=self.training)
         return latents
 
     def straight_through(self, z_e_x, labels=None):
@@ -302,6 +310,8 @@ class VQEmbedding(nn.Module):
             labels,
             self.numclasses,
             self.activate_class_partitioning,
+            self.shared_keys,
+            self.training,
         )
         z_q_x = z_q_x_.permute(0, 3, 1, 2).contiguous()
 
@@ -387,7 +397,9 @@ def weights_init(m):
 
 
 class VectorQuantizedPSI(nn.Module):
-    def __init__(self, dim=256, K=512, activate_class_partitioning=True):
+    def __init__(
+        self, dim=256, K=512, activate_class_partitioning=True, shared_keys=5
+    ):
         super().__init__()
         # self.encoder = nn.Sequential(
         #    nn.Conv2d(input_dim, dim, 4, 2, 1),
@@ -403,7 +415,10 @@ class VectorQuantizedPSI(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
 
         self.codebook = VQEmbedding(
-            K, dim, activate_class_partitioning=activate_class_partitioning
+            K,
+            dim,
+            activate_class_partitioning=activate_class_partitioning,
+            shared_keys=shared_keys,
         )
 
         self.decoder = nn.Sequential(
