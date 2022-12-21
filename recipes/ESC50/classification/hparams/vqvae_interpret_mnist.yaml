@@ -151,6 +151,7 @@ k_fidelity: 3 # top-k fidelity
 
 classifier_model_path: '/data2/cloned_repos/speechbrain-cemfork/recipes/ESC50/classification/results/mnist_class/61/save/CKPT+2022-12-20+21-32-23+00/classifier.ckpt'
 #'/data2/cloned_repos/speechbrain-cemfork/recipes/ESC50/classification/results/S2I-mnist/22/save/CKPT+2022-12-13+07-23-52+00/classifier.ckpt'
+# Path Francesco : results/S2I-mnist/1234/save/CKPT+2022-12-19+11-46-34+00/classifier.ckpt'
 pretrained_mnist: !new:speechbrain.utils.parameter_transfer.Pretrainer
     collect_in: !ref <save_folder>
     loadables:
