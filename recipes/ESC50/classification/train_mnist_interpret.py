@@ -43,8 +43,7 @@ EPS = 1e-10
 
 
 class MNISTIntBrain(sb.core.Brain):
-    """Class for sound class embedding training"
-    """
+    """Class for sound class embedding training" """
 
     def compute_forward(self, batch, stage):
         """Computation pipeline based on a encoder + sound classifier.
@@ -71,8 +70,7 @@ class MNISTIntBrain(sb.core.Brain):
         return pred, xhat, hcat, z_q_x, garbage
 
     def compute_objectives(self, predictions, batch, stage):
-        """Computes the loss using class-id as label.
-        """
+        """Computes the loss using class-id as label."""
 
         predictions, xhat, hcat, z_q_x, garbage = predictions
 
@@ -408,7 +406,6 @@ if __name__ == "__main__":
             valid_loader_kwargs=hparams["dataloader_options"],
         )
 
-
     for m in mnistbrain.modules:
         mnistbrain.modules[m].eval()
 
@@ -425,12 +422,13 @@ if __name__ == "__main__":
     # )
 
     mnistbrain.checkpointer.recover_if_possible(
-        max_key="acc", device=torch.device(mnistbrain.device),
+        max_key="acc",
+        device=torch.device(mnistbrain.device),
     )
 
     for x, y in it.islice(valid_loader, 0, 1, 1):
-        _, xhat, _, _, _ = mnistbrain.compute_forward([x, y], 'test')
-        torchvision.utils.save_image(xhat, 'reconstructions.png')
+        _, xhat, _, _, _ = mnistbrain.compute_forward([x, y], "test")
+        torchvision.utils.save_image(xhat, "reconstructions.png")
 
     for x, y in it.islice(valid_loader, 0, 1, 1):
         mask = y == 0

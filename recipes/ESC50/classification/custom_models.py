@@ -188,7 +188,8 @@ class Theta_sep(nn.Module):
 
     def forward(self, masks):
         """psi_out is of shape n_batch x n_comp x T
-        collapse time axis using "attention" based pooling"""
+        collapse time axis using "attention" based pooling
+        """
 
         masks_pooled = masks.mean(-1)
 
@@ -207,9 +208,11 @@ class MNISTNet(nn.Module):
         super(MNISTNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
+        self.conv3 = nn.Conv2d(64, 64, 3, 1)
+        self.conv4 = nn.Conv2d(64, 128, 3, 1)
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(9216, 128)
+        self.fc1 = nn.Linear(2048, 128)
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
@@ -217,18 +220,26 @@ class MNISTNet(nn.Module):
 
         x = self.conv1(x)
         x = F.relu(x)
-        hs.append(x)
+        # hs.append(x)
         x = self.conv2(x)
         x = F.relu(x)
         x = F.max_pool2d(x, 2)
-        hs.append(x)
+        # hs.append(x)
         x = self.dropout1(x)
+        x = self.conv3(x)
+        x = F.relu(x)
+        hs.append(x)
+        x = self.conv4(x)
+        x = F.relu(x)
+        x = F.max_pool2d(x, 2)
+        hs.append(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
         x = F.relu(x)
         x = self.dropout2(x)
         x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
+
         return output, hs
 
 
@@ -247,11 +258,11 @@ class PsiMNIST(nn.Module):
             32, 32, kernel_size=3, stride=1, padding=0,
         )
         # self.conv1 = nn.Conv2d(
-        #    64,
-        #    64,
-        #    kernel_size=3,
-        #    stride=1,
-        #    padding='same',
+        # 	 64,
+        # 	 64,
+        # 	 kernel_size=3,
+        # 	 stride=1,
+        # 	 padding='same',
         # )
         self.convt1x1 = nn.Conv2d(64, 1, kernel_size=1, stride=1, padding=0)
 
@@ -398,16 +409,16 @@ def weights_init(m):
 
 class VectorQuantizedPSI(nn.Module):
     def __init__(
-        self, dim=256, K=512, activate_class_partitioning=True, shared_keys=5
+        self, dim=128, K=512, activate_class_partitioning=True, shared_keys=5
     ):
         super().__init__()
         # self.encoder = nn.Sequential(
-        #    nn.Conv2d(input_dim, dim, 4, 2, 1),
-        #    nn.BatchNorm2d(dim),
-        #    nn.ReLU(True),
-        #    nn.Conv2d(dim, dim, 4, 2, 1),
-        #    ResBlock(dim),
-        #    ResBlock(dim),
+        # 	 nn.Conv2d(input_dim, dim, 4, 2, 1),
+        # 	 nn.BatchNorm2d(dim),
+        # 	 nn.ReLU(True),
+        # 	 nn.Conv2d(dim, dim, 4, 2, 1),
+        # 	 ResBlock(dim),
+        # 	 ResBlock(dim),
         # )
 
         self.conv1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
@@ -425,13 +436,15 @@ class VectorQuantizedPSI(nn.Module):
             ResBlock(dim),
             ResBlock(dim),
             nn.ReLU(True),
+            nn.ConvTranspose2d(dim, dim, 3, 2, 1),
+            nn.BatchNorm2d(dim),
+            nn.ReLU(True),
             nn.ConvTranspose2d(dim, dim, 4, 2, 1),
             nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.ConvTranspose2d(dim, 1, 4, 2, 1),
             nn.Sigmoid(),
         )
-
         self.apply(weights_init)
 
     def encode(self, hs):
@@ -447,17 +460,19 @@ class VectorQuantizedPSI(nn.Module):
         return x_tilde
 
     def forward(self, hs, labels):
-        h1 = self.conv2(hs[0])
-        h1 = F.relu(h1)
-        h3 = self.conv3(h1)
-        h3 = F.relu(h3)
-        # h2up = F.relu(h2up)
+        # h1 = self.conv2(hs[0])
+        # h1 = F.relu(h1)
+        # h3 = self.conv3(h1)
+        # h3 = F.relu(h3)
+        ## h2up = F.relu(h2up)
+        #
+        # h2 = self.conv1(hs[1])
+        # h2 = F.relu(h2)
+        ## h1up = F.relu(h1up)
+        #
+        # hcat = torch.cat([h2, h3], dim=1)
 
-        h2 = self.conv1(hs[1])
-        h2 = F.relu(h2)
-        # h1up = F.relu(h1up)
-
-        hcat = torch.cat([h2, h3], dim=1)
+        hcat = hs[1]
 
         # z_e_x = self.encoder(hcat)
         z_q_x_st, z_q_x = self.codebook.straight_through(hcat, labels)
