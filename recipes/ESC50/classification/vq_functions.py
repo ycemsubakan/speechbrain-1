@@ -61,7 +61,9 @@ class VectorQuantization(Function):
             inputs_size = inputs.size()
             inputs_flatten = inputs.view(-1, embedding_size)
 
-            labels_expanded = labels.reshape(-1, 1, 1).repeat(1, 7, 7)
+            labels_expanded = labels.reshape(-1, 1, 1).repeat(
+                1, inputs_size[1], inputs_size[2]
+            )
             labels_flatten = labels_expanded.reshape(-1)
 
             irrelevant_regions = get_irrelevant_regions(
@@ -72,8 +74,8 @@ class VectorQuantization(Function):
                 stage="TRAIN" if training else "VALID",
             )
 
-            codebook_sqr = torch.sum(codebook ** 2, dim=1)
-            inputs_sqr = torch.sum(inputs_flatten ** 2, dim=1, keepdim=True)
+            codebook_sqr = torch.sum(codebook**2, dim=1)
+            inputs_sqr = torch.sum(inputs_flatten**2, dim=1, keepdim=True)
 
             # Compute the distances to the codebook
             distances = torch.addmm(

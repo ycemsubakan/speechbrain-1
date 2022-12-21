@@ -39,8 +39,7 @@ import torch.nn.functional as F
 
 
 class MNISTBrain(sb.core.Brain):
-    """Class for sound class embedding training"
-    """
+    """Class for sound class embedding training" """
 
     def compute_forward(self, batch, stage):
         """Computation pipeline based on a encoder + sound classifier.
@@ -53,8 +52,7 @@ class MNISTBrain(sb.core.Brain):
         return pred
 
     def compute_objectives(self, predictions, batch, stage):
-        """Computes the loss using class-id as label.
-        """
+        """Computes the loss using class-id as label."""
 
         lens = torch.ones(batch[1].shape[0]).to(self.device)
         labels = batch[1].to(self.device)
