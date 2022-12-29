@@ -299,7 +299,7 @@ class VQEmbedding(nn.Module):
         ).unsqueeze(
             1
         )  # .to(self.embedding.device) * 5
-        uniform_mat = uniform_mat.repeat(1, D)
+        # uniform_mat = uniform_mat.repeat(1, D) * 0.02
 
         self.embedding.weight.data.uniform_(-1.0 / K, 1.0 / K)
         self.embedding.weight.data += uniform_mat

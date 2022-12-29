@@ -364,7 +364,7 @@ if __name__ == "__main__":
 
     lam = lambda x: torch.clamp(x, 0, 1)
     train_kwargs = {"batch_size": 64}
-    test_kwargs = {"batch_size": 128}
+    test_kwargs = {"batch_size": 256}
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -422,8 +422,7 @@ if __name__ == "__main__":
     # )
 
     mnistbrain.checkpointer.recover_if_possible(
-        max_key="acc",
-        device=torch.device(mnistbrain.device),
+        max_key="acc", device=torch.device(mnistbrain.device),
     )
 
     for x, y in it.islice(valid_loader, 0, 1, 1):
@@ -441,7 +440,7 @@ if __name__ == "__main__":
 
         Nmin = min(N0, N1)
 
-        mix_0 = torch.clamp(0.7 * x0[:Nmin] + 0.3 * x1[:Nmin], 0, 1)
+        mix_0 = torch.clamp(x0[:Nmin] + x1[:Nmin], 0, 1)
         mix_1 = torch.clamp(0.2 * x0[:Nmin] + 0.8 * x1[:Nmin], 0, 1)
 
         preds0, xhat0, _, _, garbage0 = mnistbrain.compute_forward(
