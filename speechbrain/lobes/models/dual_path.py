@@ -983,8 +983,10 @@ class Dual_Path_Model(nn.Module):
             self.activation = nn.Sigmoid()
         elif output_activation == "softplus":
             self.activation = nn.Softplus()
-        else:
+        elif output_activation == 'relu':
             self.activation = nn.ReLU()
+        else:
+            self.activation = lambda x: x
 
         # gated output layer
         self.output = nn.Sequential(

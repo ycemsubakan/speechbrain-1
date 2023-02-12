@@ -1,0 +1,172 @@
+# #################################
+# Basic training parameters
+# To train a different model, change "!include:" statement to new model file
+# To compute loss in the time domain, switch "waveform_target" to True
+# Authors:
+#  * Szu-Wei Fu 2020
+#  * Peter Plantinga 2020, 2021
+# #################################
+
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 4234
+__set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
+
+data_folder: /localscratch/noisy-vctk-16k
+test_clean_folder: !ref <data_folder>/clean_testset_wav_16k/
+
+experiment_name: sepformer-freq-vctk-speedaug-nodm
+output_folder: !ref ./results/<experiment_name>/<seed>
+save_folder: !ref <output_folder>/save
+train_log: !ref <output_folder>/train_log.txt
+enhanced_folder: !ref <output_folder>/enhanced_wavs
+test_only: False
+use_dm: False
+normalize_levels: False
+
+# Basic parameters
+use_tensorboard: False
+tensorboard_logs: !ref <output_folder>/logs/
+
+# FFT parameters
+Sample_rate: 16000
+Win_length: 32
+Hop_length: 16
+N_fft: 512
+window_fn: !name:torch.hamming_window
+training_signal_len: 64000
+use_freq_domain: True
+threshold_byloss: True
+threshold : 0.000001
+clip_grad_norm: 5
+loss_upper_lim: 2
+
+# Data files
+train_annotation: !ref <output_folder>/train.json
+valid_annotation: !ref <output_folder>/valid.json
+test_annotation: !ref <output_folder>/test.json
+skip_prep: False
+
+# Training Parameters
+number_of_epochs: 300
+N_batch: 12
+lr: 0.00015
+sorting: random
+dataloader_options:
+    batch_size: !ref <N_batch>
+waveform_target: False  # Switch to TRUE to
+
+# Change this import to use a different model
+N_encoder_out: 257
+out_channels: 256
+kernel_size: 16
+kernel_stride: 8
+num_spks: 1
+
+use_speed_perturb: True
+speedperturb: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
+    perturb_prob: 1.0
+    drop_freq_prob: 0.0
+    drop_chunk_prob: 0.0
+    sample_rate: !ref <Sample_rate>
+    speeds: [95, 100, 105]
+
+# Specifying the network
+Encoder: !new:speechbrain.lobes.models.dual_path.Encoder
+    kernel_size: !ref <kernel_size>
+    out_channels: !ref <N_encoder_out>
+
+SBtfintra: !new:speechbrain.lobes.models.dual_path.SBTransformerBlock
+    num_layers: 8
+    d_model: !ref <out_channels>
+    nhead: 8
+    d_ffn: 1024
+    dropout: 0
+    use_positional_encoding: True
+    norm_before: True
+
+SBtfinter: !new:speechbrain.lobes.models.dual_path.SBTransformerBlock
+    num_layers: 8
+    d_model: !ref <out_channels>
+    nhead: 8
+    d_ffn: 1024
+    dropout: 0
+    use_positional_encoding: True
+    norm_before: True
+
+MaskNet: !new:speechbrain.lobes.models.dual_path.Dual_Path_Model
+    num_spks: !ref <num_spks>
+    in_channels: !ref <N_encoder_out>
+    out_channels: !ref <out_channels>
+    num_layers: 2
+    K: 250
+    intra_model: !ref <SBtfintra>
+    inter_model: !ref <SBtfinter>
+    norm: ln
+    linear_layer_after_inter_intra: False
+    skip_around_intra: True
+    output_activation: relu
+
+Decoder: !new:speechbrain.lobes.models.dual_path.Decoder
+    in_channels: !ref <N_encoder_out>
+    out_channels: 1
+    kernel_size: !ref <kernel_size>
+    stride: !ref <kernel_stride>
+    bias: False
+
+#models: !include:models/CNNTransformer.yaml
+#    N_fft: !ref <N_fft>
+
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+modules:
+    encoder: !ref <Encoder>
+    decoder: !ref <Decoder>
+    masknet: !ref <MaskNet>
+
+opt_class: !name:torch.optim.Adam
+    lr: !ref <lr>
+
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        encoder: !ref <Encoder>
+        decoder: !ref <Decoder>
+        masknet: !ref <MaskNet>
+        counter: !ref <epoch_counter>
+        # lr_scheduler: !ref <lr_scheduler>
+
+compute_cost: !name:speechbrain.nnet.losses.mse_loss
+
+# To use STOI loss, switch "waveform_target" to True
+# compute_cost: !name:speechbrain.nnet.loss.stoi_loss.stoi_loss
+
+compute_STFT: !new:speechbrain.processing.features.STFT
+    sample_rate: !ref <Sample_rate>
+    win_length: !ref <Win_length>
+    hop_length: !ref <Hop_length>
+    n_fft: !ref <N_fft>
+    window_fn: !ref <window_fn>
+
+compute_ISTFT: !new:speechbrain.processing.features.ISTFT
+    sample_rate: !ref <Sample_rate>
+    win_length: !ref <Win_length>
+    hop_length: !ref <Hop_length>
+    window_fn: !ref <window_fn>
+
+resynth: !name:speechbrain.processing.signal_processing.resynthesize
+    stft: !ref <compute_STFT>
+    istft: !ref <compute_ISTFT>
+
+mean_var_norm: !new:speechbrain.processing.features.InputNormalization
+    norm_type: sentence
+
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
+    factor: 0.5
+    patience: 3
+    dont_halve_until_epoch: 200
+
+
