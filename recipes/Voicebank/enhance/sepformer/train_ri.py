@@ -41,6 +41,28 @@ class SEBrain(sb.Brain):
                 predict_spec = torch.stack([predict_spec[:, :self.hparams.N_fft_effective, :], predict_spec[:, self.hparams.N_fft_effective:, :]], dim=-1).permute(0, 2, 1, 3)
                 est_source = self.hparams.compute_ISTFT(predict_spec)
 
+            elif self.hparams.spect_use_type == 'complex_mask':
+                EPS = 1e-10
+                mix_stft = self.hparams.compute_STFT(noisy_wavs)
+                mix_w_complex = torch.view_as_complex(mix_stft)
+                mix_w_mag = mix_w_complex.abs()
+                mix_w_phase = mix_w_complex / (mix_w_mag + EPS)
+
+                mix_w = self.compute_feats_ri(noisy_wavs)
+                mix_w = mix_w.permute(0, 2, 1)
+                predict_spec = self.modules.masknet(mix_w).squeeze(0)
+                predict_spec = predict_spec.permute(0, 2, 1)
+
+                predict_real = predict_spec[:, :, :self.hparams.N_fft_effective]
+                predict_im = predict_spec[:, :, self.hparams.N_fft_effective:]
+                predict = torch.stack([predict_real, predict_im], dim=-1)
+                mask_complex = torch.view_as_complex(predict)
+                mask_mag = torch.tanh(mask_complex.abs())
+                mask_phase = mask_complex / (mask_complex.abs() + EPS)
+
+                predict_spec = (mask_mag * mix_w_mag) * mask_phase * mix_w_phase
+                predict_spec = torch.view_as_real(predict_spec)
+                est_source = self.hparams.compute_ISTFT(predict_spec)
             else:
                 mix_w = self.compute_feats(noisy_wavs)
                 mix_w = mix_w.permute(0, 2, 1)
@@ -213,12 +235,12 @@ class SEBrain(sb.Brain):
             self.optimizer.step()
         else:
             self.nonfinite_count += 1
-            logger.info(
+            print(
                 "infinite loss or empty loss! it happened {} times so far - skipping this batch".format(
                     self.nonfinite_count
                 )
             )
-            loss.data = torch.tensor(0).to(self.device)
+            loss.data = torch.tensor(0.0).to(self.device)
         self.optimizer.zero_grad()
 
         return loss.detach().cpu()
@@ -238,7 +260,7 @@ class SEBrain(sb.Brain):
                 batch.id, clean_wavs.unsqueeze(-1), predict_wav.unsqueeze(-1)
                 )
         else:
-            if self.hparams.spect_use_type == 'ri':
+            if self.hparams.spect_use_type in ['ri', 'complex_mask']:
                 clean_spec = self.hparams.compute_STFT(clean_wavs)
                 len1 = clean_spec.shape[1]
                 len2 = predict_spec.shape[1]
@@ -247,8 +269,18 @@ class SEBrain(sb.Brain):
                     clean_spec = clean_spec[:, :min_len]
                     predict_spec = predict_spec[:, :min_len]
 
-                loss = self.hparams.compute_cost(predict_spec[0], clean_spec[0]) + \
-                       self.hparams.compute_cost(predict_spec[1], clean_spec[1])
+                if getattr(self.hparams, "use_timedom_loss", False):
+                    len1 = clean_wavs.shape[1]
+                    len2 = predict_wav.shape[1]
+                    if len1 != len2:
+                        min_len = min(len1, len2)
+                        clean_wavs = clean_wavs[:, :min_len]
+                        predict_wav = predict_wav[:, :min_len]
+
+                    loss = self.hparams.compute_cost(clean_wavs.unsqueeze(-1), predict_wav.unsqueeze(-1)).mean()
+                else:
+                    loss = self.hparams.compute_cost(predict_spec[0], clean_spec[0]) + \
+                           self.hparams.compute_cost(predict_spec[1], clean_spec[1])
             else:
                 clean_spec = self.compute_feats(clean_wavs)
                 len1 = clean_spec.shape[1]
@@ -259,10 +291,15 @@ class SEBrain(sb.Brain):
                     predict_spec = predict_spec[:, :min_len]
 
                 loss = self.hparams.compute_cost(predict_spec, clean_spec)
-
-            self.loss_metric.append(
-                batch.id, predict_spec, clean_spec, reduction="batch"
-            )
+            
+            if getattr(self.hparams, "use_timedom_loss", False):
+                self.loss_metric.append(
+                    batch.id, predict_spec, clean_spec
+                )
+            else:
+                self.loss_metric.append(
+                    batch.id, predict_spec, clean_spec, reduction="batch"
+                )
 
         # torchaudio.save('clean.wav', clean_wavs[0:1].cpu().data, 16000)
         # torchaudio.save('predict_wav.wav', predict_wav[0:1].cpu().data, 16000)
