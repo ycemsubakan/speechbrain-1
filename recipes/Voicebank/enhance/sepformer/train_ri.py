@@ -47,8 +47,16 @@ class SEBrain(sb.Brain):
                 mix_w_complex = torch.view_as_complex(mix_stft)
                 mix_w_mag = mix_w_complex.abs()
                 mix_w_phase = mix_w_complex / (mix_w_mag + EPS)
+                if self.hparams.spect_transform == 'sqrt':
+                    mix_wmag_tf = torch.sqrt(mix_w_mag)
+                else:
+                    mix_wmag_tf = mix_w_mag
 
-                mix_w = self.compute_feats_ri(noisy_wavs)
+                if self.hparams.input_type == 'RI':
+                    mix_w = self.compute_feats_ri(noisy_wavs)
+                elif self.hparams.input_type == 'magphase':
+                    mix_w = self.compute_feats_ri_magphaseinp(noisy_wavs)
+
                 mix_w = mix_w.permute(0, 2, 1)
                 predict_spec = self.modules.masknet(mix_w).squeeze(0)
                 predict_spec = predict_spec.permute(0, 2, 1)
@@ -57,12 +65,22 @@ class SEBrain(sb.Brain):
                 predict_im = predict_spec[:, :, self.hparams.N_fft_effective:]
                 predict = torch.stack([predict_real, predict_im], dim=-1)
                 mask_complex = torch.view_as_complex(predict)
-                mask_mag = torch.tanh(mask_complex.abs())
+                if self.hparams.out_nonl == 'tanh':
+                    mask_mag = torch.tanh(mask_complex.abs())
+                elif self.hparams.out_nonl == 'relu':
+                    mask_mag = torch.relu(mask_complex.abs())
+                else:
+                    mask_mag = (mask_complex.abs())
+
                 mask_phase = mask_complex / (mask_complex.abs() + EPS)
 
-                predict_spec = (mask_mag * mix_w_mag) * mask_phase * mix_w_phase
-                predict_spec = torch.view_as_real(predict_spec)
-                est_source = self.hparams.compute_ISTFT(predict_spec)
+                if self.hparams.spect_transform == 'sqrt':
+                    predict_spec = (mask_mag * mix_wmag_tf).pow(2) * mask_phase * mix_w_phase
+                else:
+                    predict_spec = (mask_mag * mix_wmag_tf) * mask_phase * mix_w_phase
+                predict_spec_recons = torch.view_as_real(predict_spec)
+                predict_spec = mask_mag * mix_wmag_tf
+                est_source = self.hparams.compute_ISTFT(predict_spec_recons)
             else:
                 mix_w = self.compute_feats(noisy_wavs)
                 mix_w = mix_w.permute(0, 2, 1)
@@ -135,8 +153,20 @@ class SEBrain(sb.Brain):
         """Feature computation pipeline for RI estimation"""
         feats = self.hparams.compute_STFT(wavs)
         feats = torch.cat([feats[:, :, :, 0], feats[:, :, :, 1]], dim=2)
-                    
         return feats
+
+
+    def compute_feats_ri_magphaseinp(self, wavs):
+        feats = self.hparams.compute_STFT(wavs)
+        feats = torch.stack([feats[:, :, :, 0], feats[:, :, :, 1]], dim=-1)
+
+        feats_complex = torch.view_as_complex(feats)
+
+        if self.hparams.spect_transform == 'sqrt':
+            feats_magphase = torch.cat([feats_complex.abs().sqrt(), feats_complex.angle()], dim=-1)
+        else:
+            feats_magphase = torch.cat([feats_complex.abs(), feats_complex.angle()], dim=-1)
+        return feats_magphase
 
 
 
@@ -278,6 +308,9 @@ class SEBrain(sb.Brain):
                         predict_wav = predict_wav[:, :min_len]
 
                     loss = self.hparams.compute_cost(clean_wavs.unsqueeze(-1), predict_wav.unsqueeze(-1)).mean()
+                    magspec_loss = (predict_spec - torch.view_as_complex(clean_spec).abs().sqrt()).pow(2).mean()
+                    loss = loss + self.hparams.mag_weight * magspec_loss
+
                 else:
                     loss = self.hparams.compute_cost(predict_spec[0], clean_spec[0]) + \
                            self.hparams.compute_cost(predict_spec[1], clean_spec[1])
@@ -294,7 +327,7 @@ class SEBrain(sb.Brain):
             
             if getattr(self.hparams, "use_timedom_loss", False):
                 self.loss_metric.append(
-                    batch.id, predict_spec, clean_spec
+                    batch.id, predict_wav.unsqueeze(-1), clean_wavs.unsqueeze(-1)
                 )
             else:
                 self.loss_metric.append(

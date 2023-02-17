@@ -24,6 +24,7 @@ use_dm: True
 normalize_levels: False
 spect_transform: sqrt
 spect_use_type: complex_mask
+input_type: RI
 
 # Basic parameters
 use_tensorboard: False
@@ -66,6 +67,7 @@ out_channels: 256
 kernel_size: 16
 kernel_stride: 8
 num_spks: 1
+out_nonl: tanh
 
 use_speed_perturb: True
 speedperturb: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
