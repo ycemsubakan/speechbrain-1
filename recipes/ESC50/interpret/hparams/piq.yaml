@@ -42,15 +42,15 @@ ckpt_interval_minutes: 15 # save checkpoint every N min
 # Training parameters
 number_of_epochs: 200
 batch_size: 16
-lr: 0.0001
+lr: 0.0002
 base_lr: 0.00002
 max_lr: !ref <lr>
 step_size: 65000
 sample_rate: 16000
 use_vq: True
-rec_loss_coef: 10
+rec_loss_coef: 1
 use_mask_output: True
-mask_th: 0.15
+mask_th: 0.35
 
 device: "cuda:0"
 
@@ -146,7 +146,7 @@ opt_class: !name:torch.optim.Adam
 lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
     factor: 0.5
     patience: 3
-    dont_halve_until_epoch: 50
+    dont_halve_until_epoch: 100
 
 # Logging + checkpoints
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -181,7 +181,8 @@ compute_features: !new:speechbrain.lobes.features.Fbank
 
 use_pretrain: False
 
-embedding_model: !new:custom_models.Conv2dEncoder_v2
+# embedding_model: !new:custom_models.Conv2dEncoder_v2
+embedding_model: !new:speechbrain.lobes.models.PIQ.Conv2dEncoder_v2
     dim: 256
 
 classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
@@ -205,7 +206,7 @@ pretrained_esc50: !new:speechbrain.utils.parameter_transfer.Pretrainer
 
 # Interpretation hyperparams
 T: 413
-K: 512
+K: 1024
 FREQ: 513
 
 # pre-processing
@@ -231,7 +232,7 @@ compute_istft: !new:speechbrain.processing.features.ISTFT
     hop_length: !ref <hop_length>
     win_length: !ref <win_length>
 
-psi_model: !new:custom_models.VectorQuantizedPSI_Audio
+psi_model: !new:speechbrain.lobes.models.PIQ.VectorQuantizedPSI_Audio
     dim: 256
     K: !ref <K>
     shared_keys: 0
