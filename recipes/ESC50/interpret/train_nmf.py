@@ -16,7 +16,7 @@ import speechbrain as sb
 from hyperpyyaml import load_hyperpyyaml
 from speechbrain.utils.distributed import run_on_main
 from esc50_prepare import prepare_esc50
-from train_classifier import dataio_prep
+from train_l2i import dataio_prep
 
 
 class NMFBrain(sb.core.Brain):

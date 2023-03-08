@@ -103,18 +103,33 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_power = sb.processing.features.spectral_magnitude(
             X_stft, power=self.hparams.spec_mag_power
         )
-        X_logmel = self.modules.compute_fbank(X_stft_power)
+        if self.hparams.use_melspectra:
+            net_input = self.modules.compute_fbank(X_stft_power)
+        else:
+            net_input = torch.log1p(X_stft_power)
 
         # get the classifier embeddings
-        embeddings, f_I = self.hparams.embedding_model(X_logmel)
+        temp = self.hparams.embedding_model(net_input)
+
+        if isinstance(temp, tuple): # if embeddings are not used for interpretation
+            embeddings, f_I = temp
+        else:
+            embeddings, f_I = temp, temp
 
         # get the nmf activations
         psi_out = self.modules.psi(f_I)
+
+        if isinstance(psi_out, tuple):
+            psi_out = psi_out[0]
+            psi_out = psi_out.squeeze(1).permute(0, 2, 1)
 
         # cut the length of psi in case necessary
         psi_out = psi_out[:, :, : X_stft_power.shape[1]]
 
         # get the classifier output
+        if embeddings.ndim == 4:
+            embeddings = embeddings.mean((-1, -2))
+
         predictions = self.hparams.classifier(embeddings).squeeze(1)
         pred_cl = torch.argmax(predictions, dim=1)[0].item()
         # print(pred_cl)
@@ -140,6 +155,9 @@ class InterpreterESC50Brain(sb.core.Brain):
         # cem : for the denominator we need to sum over all K, not just the selected ones.
         X_withselected = nmf_dictionary[:, L] @ psi_out[L, :]
         Xhat = nmf_dictionary @ psi_out
+
+        # TODO: fix decoder to avoid needed this
+        X_stft_power_log = X_stft_power_log[..., :Xhat.shape[1]]
 
         # need the eps for the denominator
         eps = 1e-10
@@ -287,13 +305,29 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_power = sb.processing.features.spectral_magnitude(
             X_stft, power=self.hparams.spec_mag_power
         )
-        X_logmel = self.modules.compute_fbank(X_stft_power)
+        if self.hparams.use_melspectra:
+            net_input = self.modules.compute_fbank(X_stft_power)
+        else:
+            net_input = torch.log1p(X_stft_power)
 
         # Embeddings + sound classifier
-        embeddings, f_I = self.hparams.embedding_model(X_logmel)
+        temp = self.hparams.embedding_model(net_input)
+        if isinstance(temp, tuple):
+            embeddings, f_I = temp
+        else:
+            embeddings, f_I = temp, temp
+
+        if embeddings.ndim == 4:
+            embeddings = embeddings.mean((-1, -2))
+
         predictions = self.hparams.classifier(embeddings).squeeze(1)
 
         psi_out = self.modules.psi(f_I)  # generate nmf activations
+
+        if isinstance(psi_out, tuple):
+            psi_out = psi_out[0]
+            psi_out = psi_out.squeeze(1).permute(0, 2, 1)
+
         # cut the length of psi
         psi_out = psi_out[:, :, : X_stft_power.shape[1]]
 
@@ -342,6 +376,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             uttid, predict=classification_out, target=classid, length=lens
         )
 
+        X_stft_logpower = X_stft_logpower[..., :reconstructions.shape[2]]
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
         # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
         loss_nmf = self.hparams.alpha * loss_nmf
@@ -390,15 +425,30 @@ class InterpreterESC50Brain(sb.core.Brain):
                 X_stft, power=self.hparams.spec_mag_power
             ).transpose(1, 2)
 
+            # TODO: remove after checking results
+            X_stft_power = X_stft_power[..., :417]
+
             X2 = torch.zeros_like(X_stft_power)
             for (i, wav) in enumerate(wavs):
                 X2[i] = X_stft_power[i] - self.interpret_sample(
                     wav.unsqueeze(0)
                 )
 
-            X2_logmel = self.modules.compute_fbank(X2.transpose(1, 2))
+            if self.hparams.use_melspectra:
+                net_input = self.modules.compute_fbank(X2.transpose(1, 2))
+            else:
+                net_input = torch.log1p(X2.transpose(1, 2))
 
-            embeddings, _ = self.hparams.embedding_model(X2_logmel)
+            temp = self.hparams.embedding_model(net_input)
+
+            if isinstance(temp, tuple):
+                embeddings = temp[0]
+            else:
+                embeddings = temp
+
+            if embeddings.ndim == 4:
+                embeddings = embeddings.mean((-1, -2))
+
             predictions_masked = self.hparams.classifier(embeddings).squeeze(1)
 
             predictions = F.softmax(predictions, dim=1)
