@@ -44,7 +44,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         return X_stft_logpower, X_stft, X_stft_power
 
     def classifier_forward(self, X_stft_logpower):
-        hcat, _ = self.hparams.embedding_model(X_stft_logpower.unsqueeze(1))
+        hcat = self.hparams.embedding_model(X_stft_logpower)
         embeddings = hcat.mean((-1, -2))
         predictions = self.hparams.classifier(embeddings).squeeze(1)
         class_pred = predictions.argmax(1)

@@ -305,7 +305,7 @@ class VectorQuantizedPSI_Audio(nn.Module):
 		self.use_adapter = use_adapter
 		self.adapter_reduce_dim = adapter_reduce_dim
 		if use_adapter:
-			self.adapter = ResBlock(dim)
+			self.adapter = ResBlockAudio(dim)
 
 			if adapter_reduce_dim:
 				self.down = nn.Conv2d(dim, dim, 4, (2, 2), 1)
