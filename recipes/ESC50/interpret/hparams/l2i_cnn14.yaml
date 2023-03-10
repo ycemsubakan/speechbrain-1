@@ -77,7 +77,7 @@ lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
     dont_halve_until_epoch: 50
 
 
-use_melspectra: False
+use_melspectra: True
 
 # Logging + checkpoints
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger

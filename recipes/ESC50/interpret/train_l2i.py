@@ -426,7 +426,8 @@ class InterpreterESC50Brain(sb.core.Brain):
             ).transpose(1, 2)
 
             # TODO: remove after checking results
-            X_stft_power = X_stft_power[..., :417]
+            if not self.hparams.use_melspectra:
+                X_stft_power = X_stft_power[..., :417]
 
             X2 = torch.zeros_like(X_stft_power)
             for (i, wav) in enumerate(wavs):
