@@ -371,12 +371,14 @@ class InterpreterESC50Brain(sb.core.Brain):
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
             self.top_3_fidelity.append(batch.id, theta_out, classification_out)
+            self.input_fidelity.append(batch.id, reconstructions, classification_out)
             self.faithfulness.append(batch.id, wavs, classification_out)
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
 
         X_stft_logpower = X_stft_logpower[..., :reconstructions.shape[2]]
+
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
         # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
         loss_nmf = self.hparams.alpha * loss_nmf
@@ -417,6 +419,34 @@ class InterpreterESC50Brain(sb.core.Brain):
             temp = (k_top - pred_cl.unsqueeze(1) == 0).sum(1)
 
             return temp
+
+        @torch.no_grad()
+        def compute_inp_fidelity(interpretations, predictions):
+            """ Computes top-1 input fidelity of interpreter. """
+            interpretations = interpretations.transpose(1, 2)
+
+            if self.hparams.use_melspectra:
+                interpretations = torch.expm1(interpretations)
+                interpretations = self.modules.compute_fbank(interpretations)
+
+            temp = self.hparams.embedding_model(interpretations)
+
+            if isinstance(temp, tuple):
+                embeddings = temp[0]
+            else:
+                embeddings = temp
+
+            if embeddings.ndim == 4:
+                embeddings = embeddings.mean((-1, -2))
+
+            predictions_interpret = self.hparams.classifier(embeddings).squeeze(1)
+            predictions = F.softmax(predictions, dim=1)
+            predictions_interpret =  F.softmax(predictions_interpret, dim=1)
+
+            pred_cl = torch.argmax(predictions, dim=1)
+            k_top = torch.argmax(predictions_interpret, dim=1)
+
+            return (pred_cl == k_top).float()
 
         @torch.no_grad()
         def compute_faithfulness(wavs, predictions):
@@ -473,6 +503,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             return faithfulness
 
         self.top_3_fidelity = MetricStats(metric=compute_fidelity)
+        self.input_fidelity = MetricStats(metric=compute_inp_fidelity)
         self.faithfulness = MetricStats(metric=compute_faithfulness)
         self.acc_metric = sb.utils.metric_stats.MetricStats(
             metric=accuracy_value, n_jobs=1
@@ -493,6 +524,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         if stage == sb.Stage.VALID:
             current_fid = self.top_3_fidelity.summarize("average")
+            current_inpfid = self.input_fidelity.summarize("average")
             old_lr, new_lr = self.hparams.lr_annealing(
                 [self.optimizer], epoch, -current_fid
             )
@@ -501,6 +533,7 @@ class InterpreterESC50Brain(sb.core.Brain):
                 "loss": stage_loss,
                 "acc": self.acc_metric.summarize("average"),
                 "top-3_fid": current_fid,
+                "input-fidelity": current_inpfid,
                 "faithfulness_median": torch.Tensor(
                     self.faithfulness.scores
                 ).median(),
@@ -523,10 +556,12 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         if stage == sb.Stage.TEST:
             current_fid = self.top_3_fidelity.summarize("average")
+            current_inpfid = self.input_fidelity.summarize("average")
             test_stats = {
                 "loss": stage_loss,
                 "acc": self.acc_metric.summarize("average"),
                 "top-3_fid": current_fid,
+                "input-fidelity": current_inpfid,
                 "faithfulness_median": torch.Tensor(
                     self.faithfulness.scores
                 ).median(),
