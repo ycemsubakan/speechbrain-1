@@ -92,6 +92,7 @@ def dataio_prep(hparams):
 
     return datasets, label_encoder
 
+
 class InterpreterESC50Brain(sb.core.Brain):
     """Class for sound class embedding training" """
 
@@ -111,7 +112,9 @@ class InterpreterESC50Brain(sb.core.Brain):
         # get the classifier embeddings
         temp = self.hparams.embedding_model(net_input)
 
-        if isinstance(temp, tuple): # if embeddings are not used for interpretation
+        if isinstance(
+            temp, tuple
+        ):  # if embeddings are not used for interpretation
             embeddings, f_I = temp
         else:
             embeddings, f_I = temp, temp
@@ -145,7 +148,11 @@ class InterpreterESC50Brain(sb.core.Brain):
         # some might be negative, relevance of component
         r_c_x = theta_c_w * z / torch.abs(theta_c_w * z).max()
         # define selected components by thresholding
-        L = torch.arange(r_c_x.shape[0]).to(r_c_x.device)[r_c_x > self.hparams.relevance_th].tolist()
+        L = (
+            torch.arange(r_c_x.shape[0])
+            .to(r_c_x.device)[r_c_x > self.hparams.relevance_th]
+            .tolist()
+        )
 
         # get the log power spectra, this is needed as NMF is trained on log-power spectra
         X_stft_power_log = (
@@ -157,7 +164,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         Xhat = nmf_dictionary @ psi_out
 
         # TODO: fix decoder to avoid needed this
-        X_stft_power_log = X_stft_power_log[..., :Xhat.shape[1]]
+        X_stft_power_log = X_stft_power_log[..., : Xhat.shape[1]]
 
         # need the eps for the denominator
         eps = 1e-10
@@ -169,7 +176,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         return X_int, X_stft_phase, pred_cl
 
     def interpret_sample(self, wavs, batch=None):
-        """ get the interpratation for a given wav file."""
+        """get the interpratation for a given wav file."""
 
         # get the interpretation spectrogram, phase, and the predicted class
         X_int, X_stft_phase, pred_cl = self.interpret_computation_steps(wavs)
@@ -190,7 +197,8 @@ class InterpreterESC50Brain(sb.core.Brain):
             # save reconstructed and original spectrograms
             makedirs(
                 os.path.join(
-                    self.hparams.output_folder, f"audios_from_interpretation",
+                    self.hparams.output_folder,
+                    "audios_from_interpretation",
                 ),
                 exist_ok=True,
             )
@@ -203,7 +211,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             torchaudio.save(
                 os.path.join(
                     self.hparams.output_folder,
-                    f"audios_from_interpretation",
+                    "audios_from_interpretation",
                     f"original_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
                 wavs[0].unsqueeze(0).cpu(),
@@ -213,7 +221,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             torchaudio.save(
                 os.path.join(
                     self.hparams.output_folder,
-                    f"audios_from_interpretation",
+                    "audios_from_interpretation",
                     f"interpretation_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
                 x_int_sb.cpu(),
@@ -262,11 +270,12 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         out_folder = os.path.join(
             self.hparams.output_folder,
-            f"overlap_test",
+            "overlap_test",
             f"tc_{current_class_name}_nc_{noise_class_name}_pc_{predicted_class_name}",
         )
         makedirs(
-            out_folder, exist_ok=True,
+            out_folder,
+            exist_ok=True,
         )
 
         torchaudio.save(
@@ -371,13 +380,15 @@ class InterpreterESC50Brain(sb.core.Brain):
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
             self.top_3_fidelity.append(batch.id, theta_out, classification_out)
-            self.input_fidelity.append(batch.id, reconstructions, classification_out)
+            self.input_fidelity.append(
+                batch.id, reconstructions, classification_out
+            )
             self.faithfulness.append(batch.id, wavs, classification_out)
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
 
-        X_stft_logpower = X_stft_logpower[..., :reconstructions.shape[2]]
+        X_stft_logpower = X_stft_logpower[..., : reconstructions.shape[2]]
 
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
         # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
@@ -408,7 +419,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         @torch.no_grad()
         def compute_fidelity(theta_out, predictions):
-            """ Computes top-`k` fidelity of interpreter. """
+            """Computes top-`k` fidelity of interpreter."""
             predictions = F.softmax(predictions, dim=1)
             # theta_out = F.softmax(theta_out, dim=1)
 
@@ -422,7 +433,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         @torch.no_grad()
         def compute_inp_fidelity(interpretations, predictions):
-            """ Computes top-1 input fidelity of interpreter. """
+            """Computes top-1 input fidelity of interpreter."""
             interpretations = interpretations.transpose(1, 2)
 
             if self.hparams.use_melspectra:
@@ -439,9 +450,11 @@ class InterpreterESC50Brain(sb.core.Brain):
             if embeddings.ndim == 4:
                 embeddings = embeddings.mean((-1, -2))
 
-            predictions_interpret = self.hparams.classifier(embeddings).squeeze(1)
+            predictions_interpret = self.hparams.classifier(embeddings).squeeze(
+                1
+            )
             predictions = F.softmax(predictions, dim=1)
-            predictions_interpret =  F.softmax(predictions_interpret, dim=1)
+            predictions_interpret = F.softmax(predictions_interpret, dim=1)
 
             pred_cl = torch.argmax(predictions, dim=1)
             k_top = torch.argmax(predictions_interpret, dim=1)

@@ -56,8 +56,7 @@ class NMFBrain(sb.core.Brain):
         return loss
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
-        """Gets called at the end of an epoch.
-        """
+        """Gets called at the end of an epoch."""
         # Compute/store important stats
         if stage == sb.Stage.TRAIN:
             self.train_loss = stage_loss

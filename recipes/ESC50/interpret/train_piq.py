@@ -18,8 +18,9 @@ eps = 1e-10
 
 class InterpreterESC50Brain(sb.core.Brain):
     """Class for sound class embedding training" """
+
     def invert_stft_with_phase(self, X_int, X_stft_phase):
-        """ Inverts STFT spectra given phase. """
+        """Inverts STFT spectra given phase."""
         X_stft_phase_sb = torch.cat(
             (
                 torch.cos(X_stft_phase).unsqueeze(-1),
@@ -28,13 +29,13 @@ class InterpreterESC50Brain(sb.core.Brain):
             dim=-1,
         )
 
-        X_wpsb = X_int * X_stft_phase_sb[:, :X_int.shape[1], :, :]
+        X_wpsb = X_int * X_stft_phase_sb[:, : X_int.shape[1], :, :]
         x_int_sb = self.modules.compute_istft(X_wpsb)
 
         return x_int_sb
 
     def preprocess(self, wavs):
-        """ Pre-process wavs. """
+        """Pre-process wavs."""
         X_stft = self.modules.compute_stft(wavs)
         X_stft_power = sb.processing.features.spectral_magnitude(
             X_stft, power=self.hparams.spec_mag_power
@@ -56,11 +57,13 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_logpower, X_stft, X_stft_power = self.preprocess(wavs)
         X_stft_phase = spectral_phase(X_stft)
 
-        hcat, embeddings, predictions, class_pred = self.classifier_forward(X_stft_logpower)
+        hcat, embeddings, predictions, class_pred = self.classifier_forward(
+            X_stft_logpower
+        )
         if print_probability:
             predictions = F.softmax(predictions, dim=1)
             class_prob = predictions[0, class_pred].item()
-            print(f'classifier_prob: {class_prob}')
+            print(f"classifier_prob: {class_prob}")
 
         if self.hparams.use_vq:
             xhat, hcat, _ = self.modules.psi(hcat, class_pred)
@@ -82,17 +85,20 @@ class InterpreterESC50Brain(sb.core.Brain):
         return X_int, X_stft_phase, class_pred, X_stft_logpower, xhat
 
     def interpret_sample(self, wavs, batch=None):
-        """ get the interpratation for a given wav file."""
+        """get the interpratation for a given wav file."""
 
         # get the interpretation spectrogram, phase, and the predicted class
-        X_int, X_stft_phase, pred_cl, _, _ = self.interpret_computation_steps(wavs)
+        X_int, X_stft_phase, pred_cl, _, _ = self.interpret_computation_steps(
+            wavs
+        )
         if not (batch is None):
             x_int_sb = self.invert_stft_with_phase(X_int, X_stft_phase)
 
             # save reconstructed and original spectrograms
             makedirs(
                 os.path.join(
-                    self.hparams.output_folder, f"audios_from_interpretation",
+                    self.hparams.output_folder,
+                    "audios_from_interpretation",
                 ),
                 exist_ok=True,
             )
@@ -105,7 +111,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             torchaudio.save(
                 os.path.join(
                     self.hparams.output_folder,
-                    f"audios_from_interpretation",
+                    "audios_from_interpretation",
                     f"original_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
                 wavs[0].unsqueeze(0),
@@ -115,7 +121,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             torchaudio.save(
                 os.path.join(
                     self.hparams.output_folder,
-                    f"audios_from_interpretation",
+                    "audios_from_interpretation",
                     f"interpretation_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
                 x_int_sb,
@@ -139,14 +145,19 @@ class InterpreterESC50Brain(sb.core.Brain):
         mix = mix / mix.max()
 
         # get the interpretation spectrogram, phase, and the predicted class
-        X_int, X_stft_phase, pred_cl, X_mix, mask = self.interpret_computation_steps(mix)
+        (
+            X_int,
+            X_stft_phase,
+            pred_cl,
+            X_mix,
+            mask,
+        ) = self.interpret_computation_steps(mix)
         X_int = X_int[0, ...]
-        X_stft_phase = X_stft_phase[0, :X_int.shape[0], ...].unsqueeze(0)
+        X_stft_phase = X_stft_phase[0, : X_int.shape[0], ...].unsqueeze(0)
         pred_cl = pred_cl[0, ...]
         mask = mask[0, ...]
 
         temp = torch.expm1(X_int).unsqueeze(0).unsqueeze(-1)
-        Tmax = temp.shape[1]
         x_int_sb = self.invert_stft_with_phase(temp, X_stft_phase)
 
         # save reconstructed and original spectrograms
@@ -155,18 +166,21 @@ class InterpreterESC50Brain(sb.core.Brain):
         current_class_name = self.hparams.label_encoder.ind2lab[
             current_class_ind
         ]
-        predicted_class_name = self.hparams.label_encoder.ind2lab[pred_cl.item()]
+        predicted_class_name = self.hparams.label_encoder.ind2lab[
+            pred_cl.item()
+        ]
 
         noise_class_ind = batch.class_string_encoded.data[1].item()
         noise_class_name = self.hparams.label_encoder.ind2lab[noise_class_ind]
 
         out_folder = os.path.join(
             self.hparams.output_folder,
-            f"overlap_test",
+            "overlap_test",
             f"tc_{current_class_name}_nc_{noise_class_name}_pc_{predicted_class_name}",
         )
         makedirs(
-            out_folder, exist_ok=True,
+            out_folder,
+            exist_ok=True,
         )
 
         torchaudio.save(
@@ -193,7 +207,6 @@ class InterpreterESC50Brain(sb.core.Brain):
             self.hparams.sample_rate,
         )
 
-
         plt.figure(figsize=(10, 5), dpi=100)
 
         plt.subplot(141)
@@ -203,13 +216,13 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         plt.subplot(142)
         plt.imshow(mask.data.cpu().permute(1, 0))
-        plt.title('Estimated Mask')
+        plt.title("Estimated Mask")
         plt.colorbar()
 
         plt.subplot(143)
         plt.imshow(X_int.data.cpu().permute(1, 0).data.cpu())
         plt.colorbar()
-        plt.title('masked')
+        plt.title("masked")
         plt.savefig(os.path.join(out_folder, "specs.png"))
         plt.close()
 
@@ -226,7 +239,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             th = xhat[0].max() * 0.15
             X_masked = (xhat[0] > th) * X_stft_logpower[0, :Tmax, :]
 
-        X_est_masked = torch.expm1(X_masked).unsqueeze(0).unsqueeze(-1) 
+        X_est_masked = torch.expm1(X_masked).unsqueeze(0).unsqueeze(-1)
         xhat_tm_masked = self.invert_stft_with_phase(X_est_masked, X_stft_phase)
 
         plt.figure(figsize=(10, 5), dpi=100)
@@ -238,36 +251,40 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         plt.subplot(142)
         # input_masked = (X_target > (X_target.max() * self.hparams.mask_th)).float()
-        input_masked = X_target > (X_target.max(keepdim=True, dim=-1)[0].max(keepdim=True, dim=-2)[0] * self.hparams.mask_th)
+        input_masked = X_target > (
+            X_target.max(keepdim=True, dim=-1)[0].max(keepdim=True, dim=-2)[0]
+            * self.hparams.mask_th
+        )
         plt.imshow(input_masked)
-        plt.title('input masked')
+        plt.title("input masked")
         plt.colorbar()
 
         plt.subplot(143)
         if self.hparams.use_mask_output:
             mask = xhat[0]
         else:
-            mask = xhat[0] > th   # (xhat[0] / xhat[0] + 1e-10)
+            mask = xhat[0] > th  # (xhat[0] / xhat[0] + 1e-10)
         X_masked = mask * X_stft_logpower[0, :Tmax, :]
         plt.imshow(X_masked.permute(1, 0).data.cpu())
         plt.colorbar()
-        plt.title('masked')
+        plt.title("masked")
 
         plt.subplot(144)
         plt.imshow(mask.permute(1, 0).data.cpu())
         plt.colorbar()
-        plt.title('mask')
+        plt.title("mask")
 
         out_folder = os.path.join(
-            self.hparams.output_folder, 'reconstructions/'
-            f"{batch.id[0]}",
+            self.hparams.output_folder,
+            "reconstructions/" f"{batch.id[0]}",
         )
         makedirs(
-            out_folder, exist_ok=True,
+            out_folder,
+            exist_ok=True,
         )
 
         plt.savefig(
-            os.path.join(out_folder, 'reconstructions.png'),
+            os.path.join(out_folder, "reconstructions.png"),
             format="png",
         )
         plt.close()
@@ -286,7 +303,8 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         torchaudio.save(
             os.path.join(out_folder, "true.wav"),
-            wavs[0:1].data.cpu(), self.hparams.sample_rate
+            wavs[0:1].data.cpu(),
+            self.hparams.sample_rate,
         )
 
     def compute_forward(self, batch, stage):
@@ -300,7 +318,9 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_logpower, X_stft, X_stft_power = self.preprocess(wavs)
 
         # Embeddings + sound classifier
-        hcat, embeddings, predictions, class_pred = self.classifier_forward(X_stft_logpower)
+        hcat, embeddings, predictions, class_pred = self.classifier_forward(
+            X_stft_logpower
+        )
 
         if self.hparams.use_vq:
             xhat, hcat, z_q_x = self.modules.psi(hcat, class_pred)
@@ -330,7 +350,6 @@ class InterpreterESC50Brain(sb.core.Brain):
                 self.overlap_test(batch)
                 self.debug_files(X_stft, xhat, X_stft_logpower, batch, wavs)
 
-
         return predictions, xhat, hcat, z_q_x, garbage
 
     def compute_objectives(self, pred, batch, stage):
@@ -346,7 +365,9 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         Tmax = xhat.shape[1]
 
-        hcat_theta, embeddings, theta_out, _ = self.classifier_forward(xhat * X_stft_logpower[:, :Tmax, :])
+        hcat_theta, embeddings, theta_out, _ = self.classifier_forward(
+            xhat * X_stft_logpower[:, :Tmax, :]
+        )
 
         # if there is a separator, we need to add sigmoid to the sum
         loss_fid = 0
@@ -354,16 +375,23 @@ class InterpreterESC50Brain(sb.core.Brain):
         if self.hparams.use_mask_output:
             eps = 1e-10
             target_spec = X_stft_logpower[:, : xhat.shape[1], :]
-            #target_mask = target_spec > (target_spec.max() * self.hparams.mask_th)
+            # target_mask = target_spec > (target_spec.max() * self.hparams.mask_th)
 
-            target_mask = target_spec > (target_spec.max(keepdim=True, dim=-1)[0].max(keepdim=True, dim=-2)[0] * self.hparams.mask_th)
+            target_mask = target_spec > (
+                target_spec.max(keepdim=True, dim=-1)[0].max(
+                    keepdim=True, dim=-2
+                )[0]
+                * self.hparams.mask_th
+            )
             target_mask = target_mask.float()
             rec_loss = (
                 -target_mask * torch.log(xhat + eps)
                 - (1 - target_mask) * torch.log(1 - xhat + eps)
             ).mean()
         else:
-            rec_loss = (X_stft_logpower[:, : xhat.shape[1], :] - xhat).pow(2).mean()
+            rec_loss = (
+                (X_stft_logpower[:, : xhat.shape[1], :] - xhat).pow(2).mean()
+            )
         if self.hparams.use_vq:
             loss_vq = F.mse_loss(z_q_x, hcat.detach())
             loss_commit = F.mse_loss(hcat, z_q_x.detach())
@@ -374,19 +402,28 @@ class InterpreterESC50Brain(sb.core.Brain):
             uttid, predict=predictions, target=classid, length=lens
         )
 
-        self.recons_err.append(uttid, xhat, X_stft_logpower[:, :xhat.shape[1], :])
+        self.recons_err.append(
+            uttid, xhat, X_stft_logpower[:, : xhat.shape[1], :]
+        )
         if self.hparams.use_mask_output:
             self.mask_ll.append(uttid, xhat, target_mask)
 
         if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
-            self.top_3_fidelity.append([batch.id] * theta_out.shape[0], theta_out, predictions)
+            self.top_3_fidelity.append(
+                [batch.id] * theta_out.shape[0], theta_out, predictions
+            )
             self.faithfulness.append(batch.id, wavs, predictions)
 
         if stage != sb.Stage.TEST:
             if hasattr(self.hparams.lr_annealing, "on_batch_end"):
                 self.hparams.lr_annealing.on_batch_end(self.optimizer)
 
-        return self.hparams.rec_loss_coef * rec_loss + loss_vq + loss_commit + loss_fid
+        return (
+            self.hparams.rec_loss_coef * rec_loss
+            + loss_vq
+            + loss_commit
+            + loss_fid
+        )
 
     def on_stage_start(self, stage, epoch=None):
         @torch.no_grad()
@@ -401,7 +438,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         @torch.no_grad()
         def compute_fidelity(theta_out, predictions):
-            """ Computes top-`k` fidelity of interpreter. """
+            """Computes top-`k` fidelity of interpreter."""
             predictions = F.softmax(predictions, dim=1)
             theta_out = F.softmax(theta_out, dim=1)
 
@@ -466,7 +503,8 @@ class InterpreterESC50Brain(sb.core.Brain):
         )
         if self.hparams.use_mask_output:
             self.mask_ll = sb.utils.metric_stats.MetricStats(
-                metric=compute_bern_ll)
+                metric=compute_bern_ll
+            )
         return super().on_stage_start(stage, epoch)
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
@@ -482,7 +520,7 @@ class InterpreterESC50Brain(sb.core.Brain):
                 "rec_error": self.recons_err.summarize("average"),
             }
             if self.hparams.use_mask_output:
-                self.train_stats['mask_ll'] = self.mask_ll.summarize('average')
+                self.train_stats["mask_ll"] = self.mask_ll.summarize("average")
 
         if stage == sb.Stage.VALID:
             current_fid = self.top_3_fidelity.summarize("average")
@@ -495,11 +533,15 @@ class InterpreterESC50Brain(sb.core.Brain):
                 "acc": self.acc_metric.summarize("average"),
                 "input_fidelity": current_fid,
                 "rec_error": self.recons_err.summarize("average"),
-                "faithfulness_median": torch.Tensor(self.faithfulness.scores).median(),
-                "faithfulness_mean": torch.Tensor(self.faithfulness.scores).mean(),
+                "faithfulness_median": torch.Tensor(
+                    self.faithfulness.scores
+                ).median(),
+                "faithfulness_mean": torch.Tensor(
+                    self.faithfulness.scores
+                ).mean(),
             }
             if self.hparams.use_mask_output:
-                valid_stats['mask_ll'] = self.mask_ll.summarize('average')
+                valid_stats["mask_ll"] = self.mask_ll.summarize("average")
 
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
@@ -701,18 +743,30 @@ if __name__ == "__main__":
             progressbar=True,
             test_loader_kwargs=hparams["dataloader_options"],
         )
-        import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()
 
         Interpreter_brain.checkpointer.recover_if_possible(
-            max_key="valid_top-3_fid", device=torch.device(Interpreter_brain.device)
+            max_key="valid_top-3_fid",
+            device=torch.device(Interpreter_brain.device),
         )
 
-        for i, filename in enumerate(['original_157_229.wav', 'original_157_300.wav', 'original_199_178.wav', 'original_300_157.wav']):
+        for i, filename in enumerate(
+            [
+                "original_157_229.wav",
+                "original_157_300.wav",
+                "original_199_178.wav",
+                "original_300_157.wav",
+            ]
+        ):
             # 'original_237.wav', 'original_178.wav', 'original_229.wav']):
             print(filename)
-            data, read_sr = torchaudio.load(f'l2i_mixtures/{filename}')
-            resampler = torchaudio.transforms.Resample(orig_freq=read_sr, new_freq=hparams['sample_rate'])
+            data, read_sr = torchaudio.load(f"l2i_mixtures/{filename}")
+            resampler = torchaudio.transforms.Resample(
+                orig_freq=read_sr, new_freq=hparams["sample_rate"]
+            )
             # Resample audio
             data = resampler.forward(data).to(Interpreter_brain.device)
-            
-            Interpreter_brain.interpret_sample(data, f'mix_{i}.wav')
+
+            Interpreter_brain.interpret_sample(data, f"mix_{i}.wav")
