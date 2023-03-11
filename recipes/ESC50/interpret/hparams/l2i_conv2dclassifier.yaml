@@ -135,7 +135,7 @@ compute_istft: !new:speechbrain.processing.features.ISTFT
     hop_length: !ref <hop_length>
     win_length: !ref <win_length>
 
-psi_model: !new:custom_models.PIQAnalogPSI_Audio_L2I
+psi_model: !new:speechbrain.lobes.models.PIQ.PIQAnalogPSI_Audio_L2I
     dim: 256
     K: !ref <K>
     use_adapter: False
