@@ -86,7 +86,7 @@ K: 100
 N_FREQ: 513
 
 # NMF Decoder
-nmf_decoder: !new:speechbrain.lobes.models.L2I.NMFDecoder
+nmf_decoder: !new:speechbrain.lobes.models.L2I.NMFDecoderAudio
     n_comp: !ref <K>
     n_freq: !ref <N_FREQ>
     # init_file: !ref <nmf_d_path>
