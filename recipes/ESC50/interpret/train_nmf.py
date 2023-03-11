@@ -36,7 +36,8 @@ class NMFBrain(sb.core.Brain):
         X_stft_power = self.hparams.compute_stft_mag(X_stft)
         X_stft_tf = torch.log1p(X_stft_power)
         z = self.hparams.nmf_encoder(X_stft_tf.permute(0, 2, 1))
-        Xhat = torch.matmul(self.hparams.nmf_decoder.return_W(), z.squeeze())
+        Xhat = self.hparams.nmf_decoder(z)
+        # Xhat = torch.matmul(self.hparams.nmf_decoder.return_W(), z.squeeze())
 
         return Xhat
 
