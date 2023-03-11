@@ -132,7 +132,7 @@ class NMFDecoderAudio(nn.Module):
 
     def return_W(self):
         W = self.W
-        return W
+        return self.activ(W)
 
 
 class NMFDecoder(nn.Module):
