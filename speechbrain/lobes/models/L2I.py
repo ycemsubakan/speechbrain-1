@@ -103,6 +103,39 @@ class Psi(nn.Module):
         x = self.act(self.out_conv(x)).squeeze(3)
         return x
 
+class NMFDecoderAudio(nn.Module):
+	def __init__(self, n_comp=100, n_freq=513, init_file=None, device="cuda"):
+		super(NMFDecoderAudio, self).__init__()
+
+		self.W = nn.Parameter(
+			0.1 * torch.rand(n_freq, n_comp), requires_grad=True
+		)
+		self.activ = nn.ReLU()
+
+		if init_file is not None:
+			if ".pt" in init_file:
+				self.W.data = torch.load(
+					init_file, map_location=torch.device(device)
+				)
+			else:
+				temp = np.load(init_file)
+				self.W.data = torch.as_tensor(temp).float()
+
+	def forward(self, inp):
+		# Assume input of shape n_batch x n_comp x T
+		H = (inp)
+
+		output = (H.unsqueeze(-1) * self.W.t().unsqueeze(0).unsqueeze(0)).sum(2)
+
+		return output
+
+	def return_W(self, dtype="torch"):
+		W = self.W
+		W = nn.functional.normalize(self.activ(W), dim=0, p=2)
+		if dtype == "numpy":
+			return W.cpu().data.numpy()
+		else:
+			return W
 
 class NMFDecoder(nn.Module):
     """This class implements an NMF decoder
