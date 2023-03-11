@@ -42,10 +42,13 @@ ckpt_interval_minutes: 15 # save checkpoint every N min
 
 # Training parameters
 number_of_epochs: 200
-batch_size: 2
-lr: 0.0001
-sample_rate: 44100
+batch_size: 16
+lr: 0.0002
+base_lr: 0.00002
+max_lr: !ref <lr>
+sample_rate: 16000
 interpret_period: 1
+relevance_th: 0.2
 
 device: "cuda:0"
 

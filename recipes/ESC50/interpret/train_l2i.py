@@ -145,7 +145,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         # some might be negative, relevance of component
         r_c_x = theta_c_w * z / torch.abs(theta_c_w * z).max()
         # define selected components by thresholding
-        L = torch.arange(r_c_x.shape[0]).to(r_c_x.device)[r_c_x > 0.2].tolist()
+        L = torch.arange(r_c_x.shape[0]).to(r_c_x.device)[r_c_x > self.hparams.relevance_th].tolist()
 
         # get the log power spectra, this is needed as NMF is trained on log-power spectra
         X_stft_power_log = (

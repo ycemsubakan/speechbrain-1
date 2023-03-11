@@ -406,10 +406,10 @@ class InterpreterESC50Brain(sb.core.Brain):
             theta_out = F.softmax(theta_out, dim=1)
 
             pred_cl = torch.argmax(predictions, dim=1)
-            k_top = torch.topk(theta_out, k=1, dim=1)[1]
+            k_top = torch.argmax(theta_out, dim=1)
 
             # 1 element for each sample in batch, is 0 if pred_cl is in top k
-            temp = (k_top - pred_cl.unsqueeze(1) == 0).sum(1)
+            temp = (k_top == pred_cl).float()
 
             return temp
 
@@ -493,7 +493,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             valid_stats = {
                 "loss": stage_loss,
                 "acc": self.acc_metric.summarize("average"),
-                "top-3_fid": current_fid,
+                "input_fidelity": current_fid,
                 "rec_error": self.recons_err.summarize("average"),
                 "faithfulness_median": torch.Tensor(self.faithfulness.scores).median(),
                 "faithfulness_mean": torch.Tensor(self.faithfulness.scores).mean(),
@@ -518,7 +518,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             test_stats = {
                 "loss": stage_loss,
                 "acc": self.acc_metric.summarize("average"),
-                "top-3_fid": current_fid,
+                "input_fidelity": current_fid,
                 "faithfulness_median": torch.Tensor(
                     self.faithfulness.scores
                 ).median(),
