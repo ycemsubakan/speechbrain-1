@@ -76,12 +76,9 @@ embedding_model: !new:speechbrain.lobes.models.PIQ.Conv2dEncoder_v2
     dim: 256
 
 classifier: !new:speechbrain.lobes.models.ECAPA_TDNN.Classifier
-   input_size: 256
-   out_neurons: !ref <out_n_neurons>
-   lin_blocks: 1
-
-     # classifier: !new:custom_models.custom_classifier
-     # dim: 256
+    input_size: 256
+    out_neurons: !ref <out_n_neurons>
+    lin_blocks: 1
 
 epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
     limit: !ref <number_of_epochs>
@@ -205,8 +202,8 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
 # If you do not want to use the pretrained separator you can simply delete pretrained_separator field.
 embedding_model_path: "fpaissan/conv2d_us8k/embedding_model.ckpt"
 pretrained_encoder: !new:speechbrain.utils.parameter_transfer.Pretrainer
-     collect_in: !ref <save_folder>
-     loadables:
-         embedding_model: !ref <embedding_model>
-     paths:
-         embedding_model: !ref <embedding_model_path>
+    collect_in: !ref <save_folder>
+    loadables:
+        embedding_model: !ref <embedding_model>
+    paths:
+        embedding_model: !ref <embedding_model_path>

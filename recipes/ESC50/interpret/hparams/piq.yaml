@@ -257,4 +257,3 @@ modules:
     #mean_var_norm: !ref <mean_var_norm>
     psi: !ref <psi_model>
     # embedding_model: !ref <embedding_model>
-
