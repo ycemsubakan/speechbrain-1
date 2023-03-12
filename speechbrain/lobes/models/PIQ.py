@@ -5,7 +5,29 @@ from torch.autograd import Function
 
 
 def get_irrelevant_regions(labels, K, num_classes, N_shared=5, stage="TRAIN"):
-    # we can make this more uniform
+    """This class returns binary matrix that indicates the irrelevant regions in the VQ-dictionary given the labels array
+
+    Arguments
+    ---------
+    labels : torch.tensor
+        1 dimensional torch.tensor of size [B]
+    K : int
+        Number of keys in the dictionary
+    num_classes : int
+        Number of possible classes
+    N_shared : int
+        Number of shared keys
+    stage : str
+        "TRAIN" or else
+
+    Example:
+    --------
+    >>> labels = torch.Tensor([1, 0, 2])
+    >>> irrelevant_regions = get_irrelevant_regions(labels, 20, 3, 5)
+    >>> print(irrelevant_regions.shape)
+    torch.Size([3, 20])
+    """
+
     uniform_mat = torch.round(
         torch.linspace(-0.5, num_classes - 0.51, K - N_shared)
     ).to(labels.device)
@@ -42,7 +64,6 @@ def get_irrelevant_regions(labels, K, num_classes, N_shared=5, stage="TRAIN"):
             )
             == 1
         )
-
     return irrelevant_regions
 
 
@@ -271,25 +292,14 @@ class Conv2dEncoder_v2(nn.Module):
         # self.encoder = nn.Sequential(
         self.conv1 = nn.Conv2d(1, dim, 4, 2, 1)
         self.bn1 = nn.BatchNorm2d(dim)
-        # nn.ReLU(True),
-        # nn.LeakyReLU(),
-        # nn.Conv2d(dim, dim, 4, 2, 1),
-        # nn.BatchNorm2d(dim),
-        # nn.ReLU(True),
         self.conv2 = nn.Conv2d(dim, dim, 4, 2, 1)
         self.bn2 = nn.BatchNorm2d(dim)
-        # nn.ReLU(True),
-        # nn.LeakyReLU(),
         self.conv3 = nn.Conv2d(dim, dim, 4, 2, 1)
         self.bn3 = nn.BatchNorm2d(dim)
-        # nn.ReLU(True),
-        # nn.LeakyReLU(),
         self.conv4 = nn.Conv2d(dim, dim, 4, 2, 1)
         self.bn4 = nn.BatchNorm2d(dim)
 
         self.resblock = ResBlockAudio(dim)
-        # self.resblock2 = ResBlock(dim)
-
         self.nonl = nn.ReLU()
 
     def forward(self, x):
@@ -353,19 +363,6 @@ class VectorQuantizedPSI_Audio(nn.Module):
         adapter_reduce_dim=True,
     ):
         super().__init__()
-        # self.encoder = nn.Sequential(
-        # 	 nn.Conv2d(input_dim, dim, 4, 2, 1),
-        # 	 nn.BatchNorm2d(dim),
-        # 	 nn.ReLU(True),
-        # 	 nn.Conv2d(dim, dim, 4, 2, 1),
-        # 	 ResBlock(dim),
-        # 	 ResBlock(dim),
-        # )
-
-        # self.conv1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
-        # self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=0,)
-        # self.conv3 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
-
         self.codebook = VQEmbedding(
             K,
             dim,
@@ -383,37 +380,19 @@ class VectorQuantizedPSI_Audio(nn.Module):
                 self.up = nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1)
 
         self.decoder = nn.Sequential(
-            # ResBlock(dim),
-            # ResBlock(dim),
-            # nn.ReLU(True),
-            # nn.LeakyReLU(),
             nn.ConvTranspose2d(dim, dim, 3, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
             nn.ReLU(True),
             nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
-            # nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
-            # nn.ReLU(True),
-            nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
             nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
             nn.ReLU(),
             nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
+            nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(dim),
             nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
             nn.ReLU(),
             nn.BatchNorm2d(dim),
             nn.ConvTranspose2d(dim, 1, 12, 1, 1),
-            # nn.ReLU(),
-            # nn.LeakyReLU(),
-            # nn.Linear(505, 513),
-            # nn.ReLU(),
-            # nn.Linear(513, 513),
-            # nn.Softplus(),
         )
         self.apply(weights_init)
 
