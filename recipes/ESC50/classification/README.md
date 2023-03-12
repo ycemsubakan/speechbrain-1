@@ -1,12 +1,12 @@
 # Summary
 
-This recipe implements a classification training script (`train_classifier.py`) for the ESC50 multiclass sound classification dataset. This classification is mainly adapted from the Speechbrain UrbanSound8k recipe. The classification recipe makes use of a [CNN14 model](https://arxiv.org/abs/1912.10211) and a Conv2d encoder pretrained on the [VGG Sound](https://www.robots.ox.ac.uk/~vgg/data/vggsound/) dataset with self-supervised learning. The scripts offers the possibility to train both with log-spectra and log-mel audio features.
+This recipe implements a classification training script (`train_classifier.py`) for the ESC50 multiclass sound classification dataset. This classification is mainly adapted from the Speechbrain UrbanSound8k recipe. The classification recipe makes use of a [CNN14 model](https://arxiv.org/abs/1912.10211) and a convolutional encoder pretrained on the [VGG Sound](https://www.robots.ox.ac.uk/~vgg/data/vggsound/) dataset with self-supervised learning. The scripts offers the possibility to train both with log-spectra and log-mel audio features.
 
 We have two main training scripts. Here's the breakdown, and how to run them:
 
 - *The training script for CNN14 model:* This script trains a CNN14 model on the ESC50 dataset. To run this, you can use the command `python train_classifier.py hparams/cnn14_classifier.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 
-- *The training script for the conv2d-based model:* This script trains an simple convolutional classifier on the ESC50 dataset. To run this, you can use the command `python train_classifier.py hparams/conv2d_v2classifier_16k.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
+- *The training script for the conv2d-based model:* This script trains an simple convolutional classifier on the ESC50 dataset. To run this, you can use the command `python train_classifier.py hparams/conv2d_classifier.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 
 Note that:
   - the recipe automatically downloads the ESC50 dataset. You only need to specify the path to which you would like to download it;
