@@ -11,7 +11,7 @@ from speechbrain.utils.metric_stats import MetricStats
 from os import makedirs
 import torch.nn.functional as F
 from speechbrain.processing.NMF import spectral_phase
-
+import matplotlib.pyplot as plt
 
 eps = 1e-10
 
@@ -191,6 +191,8 @@ class InterpreterESC50Brain(sb.core.Brain):
 
             temp = X_int.transpose(0, 1).unsqueeze(0).unsqueeze(-1)
 
+            X_stft_phase_sb = X_stft_phase_sb[:, : temp.shape[1], ...]
+
             X_wpsb = temp * X_stft_phase_sb
             x_int_sb = self.modules.compute_istft(X_wpsb)
 
@@ -341,7 +343,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         psi_out = psi_out[:, :, : X_stft_power.shape[1]]
 
         #  generate log-mag spectrogram
-        reconstructed = self.hparams.nmf_decoder(psi_out)
+        reconstructed = self.hparams.nmf_decoder(psi_out).transpose(1, 2)
 
         # generate classifications from time activations
         theta_out = self.modules.theta(psi_out)
@@ -353,8 +355,15 @@ class InterpreterESC50Brain(sb.core.Brain):
                 % self.hparams.interpret_period
             ) == 0 and self.hparams.save_interpretations:
                 wavs = wavs[0].unsqueeze(0)
+                fig, ax = plt.subplots(1, 2, sharex=True)
+                ax[0].imshow(net_input[0, ...].cpu())
+                ax[1].imshow(reconstructed[0, ...].cpu())
+
+                plt.savefig("stash/l2i_rec.png")
+                plt.close()
+
                 self.interpret_sample(wavs, batch)
-                self.overlap_test(batch)
+                # self.overlap_test(batch)
 
         return (reconstructed, psi_out), (predictions, theta_out)
 
@@ -375,20 +384,20 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_power = sb.processing.features.spectral_magnitude(
             X_stft, power=self.hparams.spec_mag_power
         )
-        X_stft_logpower = torch.log(X_stft_power + 1).transpose(1, 2)
+        X_stft_logpower = torch.log1p(X_stft_power)
 
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
             self.top_3_fidelity.append(batch.id, theta_out, classification_out)
             self.input_fidelity.append(
-                batch.id, reconstructions, classification_out
+                batch.id, X_stft_logpower, classification_out
             )
             self.faithfulness.append(batch.id, wavs, classification_out)
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
         )
 
-        X_stft_logpower = X_stft_logpower[..., : reconstructions.shape[2]]
+        X_stft_logpower = X_stft_logpower[:, :reconstructions.shape[1], :]
 
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
         # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
@@ -402,8 +411,10 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.last_batch = batch
         self.batch_to_plot = (reconstructions.clone(), X_stft_logpower.clone())
 
-        theta_out = -torch.log(theta_out)
-        loss_fdi = (F.softmax(classification_out, dim=0) * theta_out).mean()
+        # theta_out = -torch.log(theta_out)
+        # loss_fdi = (F.softmax(classification_out, dim=1) * theta_out).mean() 
+        theta_out = F.softmax(theta_out, dim=1).log()
+        loss_fdi = (-F.softmax(classification_out, dim=1) * theta_out).mean()
 
         return loss_nmf + loss_fdi
 
@@ -434,7 +445,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         @torch.no_grad()
         def compute_inp_fidelity(interpretations, predictions):
             """Computes top-1 input fidelity of interpreter."""
-            interpretations = interpretations.transpose(1, 2)
+            # interpretations = interpretations.transpose(1, 2)
 
             if self.hparams.use_melspectra:
                 interpretations = torch.expm1(interpretations)

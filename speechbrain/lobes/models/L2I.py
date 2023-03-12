@@ -240,7 +240,6 @@ class Theta(nn.Module):
               n_comp = number of NMF components
               T = number of timepoints
         """
-
         theta_out = self.hard_att(H).squeeze(2)
         theta_out = self.classifier(theta_out)
         return theta_out
