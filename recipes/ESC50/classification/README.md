@@ -9,7 +9,7 @@ We have two main training scripts. Here's the breakdown, and how to run them:
 - *The training script for the conv2d-based model:* This script trains an simple convolutional classifier on the ESC50 dataset. To run this, you can use the command `python train_classifier.py hparams/conv2d_v2classifier_16k.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 
 Note that:
-  - the recipe automatically downloads the ESC50 dataset. You only need to specify the path to which you would like to download it.
+  - the recipe automatically downloads the ESC50 dataset. You only need to specify the path to which you would like to download it;
   - all of the necessary models are downloaded automatically for each training script.
 
 # **About SpeechBrain**
