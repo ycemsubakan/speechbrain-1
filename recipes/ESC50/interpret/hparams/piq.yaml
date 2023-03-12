@@ -89,59 +89,19 @@ augment_speed: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
     sample_rate: !ref <sample_rate>
     speeds: [95, 100, 105]
 
-    #add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 1.0
-    #    noise_prob: 0.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-    #
-    #add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 0.0
-    #    noise_prob: 1.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-    #
-    #add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 1.0
-    #    noise_prob: 1.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-
-
 # Definition of the augmentation pipeline.
 # If concat_augment = False, the augmentation techniques are applied
 # in sequence. If concat_augment = True, all the augmented signals
 # # are concatenated in a single big batch.
-
-augment_pipeline: [
-    #!ref <augment_wavedrop>,
-    #!ref <augment_speed>,
-    #!ref <add_rev>,
-    #!ref <add_noise>,
-    #!ref <add_rev_noise>
-]
-concat_augment: True
 
 compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
         margin: 0.2
         scale: 30
 
-# compute_error: !name:speechbrain.nnet.losses.classification_error
-
 opt_class: !name:torch.optim.Adam
     lr: !ref <lr>
     weight_decay: 0.000002
-
 
 lr_annealing: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
     factor: 0.5
@@ -161,23 +121,12 @@ checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
     recoverables:
         psi_model: !ref <psi_model>
         counter: !ref <epoch_counter>
-        # embedding_model: !ref <embedding_model>
 
 
 # Model and pre-processing
 mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
-
-compute_features: !new:speechbrain.lobes.features.Fbank
-    n_mels: !ref <n_mels>
-    left_frames: !ref <left_frames>
-    right_frames: !ref <right_frames>
-    deltas: !ref <deltas>
-    sample_rate: !ref <sample_rate>
-    n_fft: 1024
-    win_length: 20
-    hop_length: 10
 
 use_pretrain: False
 
@@ -211,8 +160,6 @@ n_fft: 1024
 spec_mag_power: 0.5
 hop_length: 11.6099
 win_length: 23.2199
-
-
 compute_stft: !new:speechbrain.processing.features.STFT
     n_fft: !ref <n_fft>
     hop_length: !ref <hop_length>
@@ -237,23 +184,9 @@ psi_model: !new:speechbrain.lobes.models.PIQ.VectorQuantizedPSI_Audio
     use_adapter: True
     adapter_reduce_dim: True
 
-    # # NMF Decoder
-    # nmf_d_path: "nmf_decoder.pt"
-    # nmf: !new:speechbrain.lobes.models.L2I.NMFDecoder
-    #     init_file: !ref <nmf_d_path>
-    #     N_COMP: !ref <K>
-    #     FREQ: !ref <n_mels>
-    #     device: !ref <device>
-
-alpha: 10 # applied to NMF loss
-beta: 0.8 # L1 regularization to time activations
 k_fidelity: 3 # top-k fidelity
-
 modules:
     compute_stft: !ref <compute_stft>
     compute_fbank: !ref <compute_fbank>
     compute_istft: !ref <compute_istft>
-    compute_features: !ref <compute_features>
-    #mean_var_norm: !ref <mean_var_norm>
     psi: !ref <psi_model>
-    # embedding_model: !ref <embedding_model>

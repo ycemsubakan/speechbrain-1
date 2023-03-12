@@ -46,6 +46,7 @@ batch_size: 2
 lr: 0.0001
 sample_rate: 44100
 interpret_period: 1
+relevance_th: 0.2
 
 device: "cuda:0"
 
