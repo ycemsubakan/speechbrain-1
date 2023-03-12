@@ -387,9 +387,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         # Concatenate labels (due to data augmentation)
         if stage == sb.Stage.VALID or stage == sb.Stage.TEST:
             self.top_3_fidelity.append(batch.id, theta_out, classification_out)
-            self.input_fidelity.append(
-                batch.id, X_stft_logpower, classification_out
-            )
+            self.input_fidelity.append(batch.id, wavs, classification_out)
             self.faithfulness.append(batch.id, wavs, classification_out)
         self.acc_metric.append(
             uttid, predict=classification_out, target=classid, length=lens
@@ -441,15 +439,27 @@ class InterpreterESC50Brain(sb.core.Brain):
             return temp
 
         @torch.no_grad()
-        def compute_inp_fidelity(interpretations, predictions):
+        def compute_inp_fidelity(wavs, predictions):
             """Computes top-1 input fidelity of interpreter."""
-            # interpretations = interpretations.transpose(1, 2)
+            X_stft = self.modules.compute_stft(wavs).to(self.device)
+            X_stft_power = sb.processing.features.spectral_magnitude(
+                X_stft, power=self.hparams.spec_mag_power
+            ).transpose(1, 2)
+
+            # TODO: remove after checking results
+            if not self.hparams.use_melspectra:
+                X_stft_power = X_stft_power[..., :417]
+
+            X2 = torch.zeros_like(X_stft_power)
+            for (i, wav) in enumerate(wavs):
+                X2[i] = self.interpret_sample(wav.unsqueeze(0))
 
             if self.hparams.use_melspectra:
-                interpretations = torch.expm1(interpretations)
-                interpretations = self.modules.compute_fbank(interpretations)
+                net_input = self.modules.compute_fbank(X2.transpose(1, 2))
+            else:
+                net_input = torch.log1p(X2.transpose(1, 2))
 
-            temp = self.hparams.embedding_model(interpretations)
+            temp = self.hparams.embedding_model(net_input)
 
             if isinstance(temp, tuple):
                 embeddings = temp[0]
@@ -483,9 +493,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
             X2 = torch.zeros_like(X_stft_power)
             for (i, wav) in enumerate(wavs):
-                X2[i] = X_stft_power[i] - self.interpret_sample(
-                    wav.unsqueeze(0)
-                )
+                X2[i] = self.interpret_sample(wav.unsqueeze(0))
 
             if self.hparams.use_melspectra:
                 net_input = self.modules.compute_fbank(X2.transpose(1, 2))
