@@ -1,6 +1,11 @@
+"""This file implements the necessary classes and functions to implement Posthoc Interpretations via Quantization.
+
+ Authors
+ * Cem Subakan 2023
+ * Francesco Paissan 2023
+"""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Function
 
 
@@ -67,7 +72,22 @@ def get_irrelevant_regions(labels, K, num_classes, N_shared=5, stage="TRAIN"):
     return irrelevant_regions
 
 
+def weights_init(m):
+    """
+    Applies Xavier initialization to network weights.
+    """
+    classname = m.__class__.__name__
+    if classname.find("Conv") != -1:
+        try:
+            nn.init.xavier_uniform_(m.weight.data)
+            m.bias.data.fill_(0)
+        except AttributeError:
+            print("Skipping initialization of ", classname)
+
+
 class VectorQuantization(Function):
+    """This class defines the forward method for vector quantization. As VQ is not differentiable, it returns a RuntimeError in case `.grad()` is called. Refer to `VectorQuantizationStraightThrough` for a straight_through estimation of the gradient for the VQ operation."""
+
     @staticmethod
     def forward(
         ctx,
@@ -79,6 +99,38 @@ class VectorQuantization(Function):
         shared_keys=10,
         training=True,
     ):
+        """
+        Applies VQ to vectors `input` with `codebook` as VQ dictionary.
+
+        Arguments
+        ---------
+        inputs : torch.Tensor
+            Hidden representations to quantize. Expected shape is `torch.Size([B, W, H, C])`.
+        codebook : torch.Tensor
+            VQ-dictionary for quantization. Expected shape of `torch.Size([K, C])` with K dictionary elements.
+        labels : torch.Tensor
+            Classification labels. Used to define irrelevant regions and divide the latent space based on predicted class. Shape should be `torch.Size([B])`.
+        num_classes : int
+            Number of possible classes
+        activate_class_partitioning : bool
+            `True` if latent space should be quantized for different classes.
+        shared_keys : int
+            Number of shared keys among classes.
+        traing : bool
+            `True` if stage is TRAIN.
+
+        Returns
+        --------
+        Codebook's indices for quantized representation : torch.Tensor
+
+        Example:
+        --------
+        >>> inputs = torch.ones(3, 14, 25, 256)
+        >>> codebook = torch.randn(1024, 256)
+        >>> labels = torch.Tensor([1, 0, 2])
+        >>> print(VectorQuantization.apply(inputs, codebook, labels).shape)
+        torch.Size([3, 14, 25])
+        """
         with torch.no_grad():
             embedding_size = codebook.size(1)
             inputs_size = inputs.size()
@@ -129,6 +181,8 @@ class VectorQuantization(Function):
 
 
 class VectorQuantizationStraightThrough(Function):
+    """This class defines the forward method for vector quantization. As VQ is not differentiable, it approximates the gradient of the VQ as in https://arxiv.org/abs/1711.00937."""
+
     @staticmethod
     def forward(
         ctx,
@@ -140,6 +194,40 @@ class VectorQuantizationStraightThrough(Function):
         shared_keys=10,
         training=True,
     ):
+        """
+        Applies VQ to vectors `input` with `codebook` as VQ dictionary and estimates gradients with a
+        Straight-Through (id) approximation of the quantization steps.
+
+        Arguments
+        ---------
+        inputs : torch.Tensor
+            Hidden representations to quantize. Expected shape is `torch.Size([B, W, H, C])`.
+        codebook : torch.Tensor
+            VQ-dictionary for quantization. Expected shape of `torch.Size([K, C])` with K dictionary elements.
+        labels : torch.Tensor
+            Classification labels. Used to define irrelevant regions and divide the latent space based on predicted class. Shape should be `torch.Size([B])`.
+        num_classes : int
+            Number of possible classes
+        activate_class_partitioning : bool
+            `True` if latent space should be quantized for different classes.
+        shared_keys : int
+            Number of shared keys among classes.
+        traing : bool
+            `True` if stage is TRAIN.
+
+        Returns
+        --------
+        Quantized representation and codebook's indices for quantized representation : tuple
+
+        Example:
+        --------
+        >>> inputs = torch.ones(3, 14, 25, 256)
+        >>> codebook = torch.randn(1024, 256)
+        >>> labels = torch.Tensor([1, 0, 2])
+        >>> quant, quant_ind = VectorQuantizationStraightThrough.apply(inputs, codebook, labels)
+        >>> print(quant.shape, quant_ind.shape)
+        torch.Size([3, 14, 25, 256]) torch.Size([1050])
+        """
         indices = VectorQuantization.apply(
             inputs,
             codebook,
@@ -171,6 +259,9 @@ class VectorQuantizationStraightThrough(Function):
         shared_keys=10,
         training=True,
     ):
+        """
+        Estimates gradient assuming vector quantization as identity function. (https://arxiv.org/abs/1711.00937)
+        """
         grad_inputs, grad_codebook = None, None
 
         if ctx.needs_input_grad[0]:
@@ -190,106 +281,32 @@ class VectorQuantizationStraightThrough(Function):
         return (grad_inputs, grad_codebook, None, None, None, None, None)
 
 
-class PIQAnalogPSI_Audio_L2I(nn.Module):
-    def __init__(
-        self,
-        dim=128,
-        K=100,
-        numclasses=50,
-        use_adapter=False,
-        adapter_reduce_dim=True,
-    ):
-        super().__init__()
-        # self.encoder = nn.Sequential(
-        # 	 nn.Conv2d(input_dim, dim, 4, 2, 1),
-        # 	 nn.BatchNorm2d(dim),
-        # 	 nn.ReLU(True),
-        # 	 nn.Conv2d(dim, dim, 4, 2, 1),
-        # 	 ResBlock(dim),
-        # 	 ResBlock(dim),
-        # )
-
-        # self.conv1 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=2,)
-        # self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=0,)
-        # self.conv3 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1)
-
-        self.use_adapter = use_adapter
-        self.adapter_reduce_dim = adapter_reduce_dim
-        if use_adapter:
-            self.adapter = ResBlockAudio(dim)
-
-            if adapter_reduce_dim:
-                self.down = nn.Conv2d(dim, dim, 4, (2, 2), 1)
-                self.up = nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1)
-
-        self.decoder = nn.Sequential(
-            # ResBlock(dim),
-            # ResBlock(dim),
-            # nn.ReLU(True),
-            # nn.LeakyReLU(),
-            nn.ConvTranspose2d(dim, dim, 3, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
-            nn.ReLU(True),
-            nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
-            # nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
-            # nn.ReLU(True),
-            nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            # nn.BatchNorm2d(dim),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
-            nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
-            nn.ConvTranspose2d(dim, dim, 4, (2, 2), 1),
-            nn.ReLU(),
-            nn.BatchNorm2d(dim),
-            nn.ConvTranspose2d(dim, 1, 12, 1, 1),
-            nn.ReLU(),
-            # nn.BatchNorm2d(dim),
-            # nn.LeakyReLU(),
-            # nn.Linear(505, 513),
-            nn.Linear(513, K),
-            nn.ReLU(),
-            # nn.Softplus(),
-        )
-        self.apply(weights_init)
-
-    def forward(self, hs):
-        if self.use_adapter:
-            hcat = self.adapter(hs)
-        else:
-            hcat = hs
-
-        if self.adapter_reduce_dim:
-            hcat = self.down(hcat)
-            z_q_x_st = self.up(hcat)
-            out = self.decoder(z_q_x_st)
-        else:
-            out = self.decoder(hcat)
-
-        return out, hcat
-
-
-class custom_classifier(nn.Module):
-    def __init__(self, dim=128, num_classes=50):
-        super().__init__()
-        self.lin1 = nn.Linear(dim, dim)
-        self.lin2 = nn.Linear(dim, num_classes)
-
-    def forward(self, z):
-        z = F.relu(self.lin1(z))
-        yhat = (self.lin2(z)).unsqueeze(1)
-        return yhat
-
-
 class Conv2dEncoder_v2(nn.Module):
+    """
+    This class implements a convolutional encoder to extract classification embeddings from logspectra.
+
+    Arguments
+    ---------
+    dim : int
+        Number of channels of the extracted embeddings.
+
+    Returns
+    --------
+    Latent representations to feed inside classifier and/or intepreter.
+
+    Example:
+    --------
+    >>> inputs = torch.ones(3, 431, 513)
+    >>> model = Conv2dEncoder_v2()
+    >>> print(model(inputs).shape)
+    torch.Size([3, 256, 26, 32])
+    """
+
     def __init__(self, dim=256):
+        """
+        Extracts embeddings from logspectrograms.
+        """
         super().__init__()
-        # self.encoder = nn.Sequential(
         self.conv1 = nn.Conv2d(1, dim, 4, 2, 1)
         self.bn1 = nn.BatchNorm2d(dim)
         self.conv2 = nn.Conv2d(dim, dim, 4, 2, 1)
@@ -303,6 +320,18 @@ class Conv2dEncoder_v2(nn.Module):
         self.nonl = nn.ReLU()
 
     def forward(self, x):
+        """
+        Computes forward pass.
+        Arguments
+        --------
+        x : torch.Tensor
+            Log-power spectrogram. Expected shape `torch.Size([B, T, F])`.
+
+        Returns
+        --------
+        Embeddings : torch.Tensor
+
+        """
         x = x.unsqueeze(1)
         h1 = self.conv1(x)
         h1 = self.bn1(h1)
@@ -326,10 +355,29 @@ class Conv2dEncoder_v2(nn.Module):
 
 
 class ResBlockAudio(nn.Module):
+    """This class implements a residual block.
+
+    Arguments
+    --------
+    dim : int
+    Input channels of the tensor to process. Matches output channels of the residual block.
+
+    Returns
+    --------
+    Residual block output : torch.Tensor
+
+    Example
+    --------
+    >>> res = ResBlockAudio(128)
+    >>> x = torch.randn(2, 128, 16, 16)
+    >>> print(x.shape)
+    torch.Size([2, 128, 16, 16])
+    """
+
     def __init__(self, dim):
+        """Implements a residual block."""
         super().__init__()
         self.block = nn.Sequential(
-            # nn.ReLU(True),
             nn.Conv2d(dim, dim, 3, 1, 1),
             nn.BatchNorm2d(dim),
             nn.ReLU(True),
@@ -338,28 +386,63 @@ class ResBlockAudio(nn.Module):
         )
 
     def forward(self, x):
+        """Forward step.
+
+        Arguments
+        --------
+        x : torch.Tensor
+            Tensor to process. Expected shape is `torch.Size([B, C, H, W])`.
+
+        Returns
+        --------
+        Residual block output : torch.Tensor
+        """
         return x + self.block(x)
 
 
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find("Conv") != -1:
-        try:
-            nn.init.xavier_uniform_(m.weight.data)
-            m.bias.data.fill_(0)
-        except AttributeError:
-            print("Skipping initialization of ", classname)
-
-
 class VectorQuantizedPSI_Audio(nn.Module):
+    """
+    This class reconstructs log-power spectrograms from classifier's representations.
+
+    Arguments
+    ---------
+    dim : int
+        Dimensionality of VQ vectors.
+    K : int
+        Number of elements of VQ dictionary.
+    num_classes : int
+        Number of possible classes
+    activate_class_partitioning : bool
+        `True` if latent space should be quantized for different classes.
+    shared_keys : int
+        Number of shared keys among classes.
+    use_adapter : bool
+        `True` to learn an adapter for classifier's representations.
+    adapter_reduce_dim : bool
+        `True` if adapter should compress representations.
+
+    Returns
+    --------
+    Reconstructed log-power spectrograms, adapted classifier's representations, quantized classifier's representations. : tuple
+
+    Example:
+    --------
+    >>> psi = VectorQuantizedPSI_Audio(dim=256, K=1024)
+    >>> x = torch.randn(2, 256, 16, 16)
+    >>> labels = torch.Tensor([0, 2])
+    >>> logspectra, hcat, z_q_x = psi(x, labels)
+    >>> print(logspectra.shape, hcat.shape, z_q_x.shape)
+    torch.Size([2, 1, 257, 257]) torch.Size([2, 256, 8, 8]) torch.Size([2, 256, 8, 8])
+    """
+
     def __init__(
         self,
         dim=128,
         K=512,
         numclasses=50,
         activate_class_partitioning=True,
-        shared_keys=5,
-        use_adapter=False,
+        shared_keys=0,
+        use_adapter=True,
         adapter_reduce_dim=True,
     ):
         super().__init__()
@@ -396,14 +479,21 @@ class VectorQuantizedPSI_Audio(nn.Module):
         )
         self.apply(weights_init)
 
-    def decode(self, latents):
-        z_q_x = self.codebook.embedding(latents).permute(
-            0, 3, 1, 2
-        )  # (B, D, H, W)
-        x_tilde = self.decoder(z_q_x)
-        return x_tilde
-
     def forward(self, hs, labels):
+        """
+        Forward step. Reconstructs log-power based on provided label's keys in VQ dictionary.
+
+        Arguments
+        --------
+        hs : torch.Tensor
+            Classifier's representations.
+        labels : torch.Tensor
+            Predicted labels for classifier's representations.
+
+        Returns
+        --------
+        Reconstructed log-power spectrogram, reduced classifier's representations and quantized classifier's representations. : tuple
+        """
         if self.use_adapter:
             hcat = self.adapter(hs)
         else:
@@ -420,6 +510,23 @@ class VectorQuantizedPSI_Audio(nn.Module):
 
 
 class VQEmbedding(nn.Module):
+    """
+    Implements VQ Dictionary. Wraps `VectorQuantization` and `VectorQuantizationStraightThrough`. For more details refer to the specific class.
+
+    Arguments
+    ---------
+    K : int
+        Number of elements of VQ dictionary.
+    D : int
+        Dimensionality of VQ vectors.
+    num_classes : int
+        Number of possible classes
+    activate_class_partitioning : bool
+        `True` if latent space should be quantized for different classes.
+    shared_keys : int
+        Number of shared keys among classes.
+    """
+
     def __init__(
         self,
         K,
@@ -432,7 +539,6 @@ class VQEmbedding(nn.Module):
         self.embedding = nn.Embedding(K, D)
 
         self.embedding.weight.data.uniform_(-1.0 / K, 1.0 / K)
-        # self.embedding.weight.data += uniform_mat
 
         self.numclasses = numclasses
         self.activate_class_partitioning = activate_class_partitioning
