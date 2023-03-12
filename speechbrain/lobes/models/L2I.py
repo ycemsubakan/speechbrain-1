@@ -106,7 +106,27 @@ class Psi(nn.Module):
 
 
 class NMFDecoderAudio(nn.Module):
-    def __init__(self, n_comp=100, n_freq=513, init_file=None, device="cuda"):
+    """This class implements an NMF decoder
+
+    Arguments
+    ---------
+    n_comp : int
+        Number of NMF components
+    n_freq : int
+        The number of frequency bins in the NMF dictionary
+    device : str
+        The device to run the model
+
+    Example:
+    --------
+    >>> NMF_dec = NMFDecoderAudio(20, 210, device='cpu')
+    >>> H = torch.rand(3, 20, 150)
+    >>> Xhat = NMF_dec.forward(H)
+    >>> print(Xhat.shape)
+    torch.Size([3, 210, 150])
+    """
+
+    def __init__(self, n_comp=100, n_freq=513, device="cuda"):
         super(NMFDecoderAudio, self).__init__()
 
         self.W = nn.Parameter(
@@ -115,6 +135,17 @@ class NMFDecoderAudio(nn.Module):
         self.activ = nn.ReLU()
 
     def forward(self, H):
+        """The forward pass for NMF given the activations H
+
+        Arguments:
+        ---------
+        H : torch.Tensor
+            The activations Tensor with shape B x n_comp x T
+
+        where B = Batchsize
+              n_comp = number of NMF components
+              T = number of timepoints
+        """
         # Assume input of shape n_batch x n_comp x T
 
         H = self.activ(H)
