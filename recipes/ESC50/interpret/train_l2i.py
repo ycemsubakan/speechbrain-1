@@ -199,8 +199,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             # save reconstructed and original spectrograms
             makedirs(
                 os.path.join(
-                    self.hparams.output_folder,
-                    "audios_from_interpretation",
+                    self.hparams.output_folder, "audios_from_interpretation",
                 ),
                 exist_ok=True,
             )
@@ -276,8 +275,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             f"tc_{current_class_name}_nc_{noise_class_name}_pc_{predicted_class_name}",
         )
         makedirs(
-            out_folder,
-            exist_ok=True,
+            out_folder, exist_ok=True,
         )
 
         torchaudio.save(
@@ -397,7 +395,7 @@ class InterpreterESC50Brain(sb.core.Brain):
             uttid, predict=classification_out, target=classid, length=lens
         )
 
-        X_stft_logpower = X_stft_logpower[:, :reconstructions.shape[1], :]
+        X_stft_logpower = X_stft_logpower[:, : reconstructions.shape[1], :]
 
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
         # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
@@ -412,7 +410,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         self.batch_to_plot = (reconstructions.clone(), X_stft_logpower.clone())
 
         # theta_out = -torch.log(theta_out)
-        # loss_fdi = (F.softmax(classification_out, dim=1) * theta_out).mean() 
+        # loss_fdi = (F.softmax(classification_out, dim=1) * theta_out).mean()
         theta_out = F.softmax(theta_out, dim=1).log()
         loss_fdi = (-F.softmax(classification_out, dim=1) * theta_out).mean()
 
