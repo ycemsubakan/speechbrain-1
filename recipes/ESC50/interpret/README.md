@@ -3,12 +3,8 @@
 This recipe implements the following:
 
 - [Listen to Interpret](https://arxiv.org/abs/2202.11479v2) which makes use of Non-Negative Matrix Factorization to reconstruct the classifier hidden representation in order to provide an interpretation audio signal for the classifier decision. The corresponding training script is `train_l2i.py`.
+    * *The training script for PIQ:* This script trains PIQ on a convolutional classifier working on the ESC50 dataset. To run this, you can use the command `python train_piq.py hparams/piq.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`. Companion website with samples can be found [here](https://piqinter.github.io/). 
 - [Posthoc Interpretability via Quantization]() which makes use of vector quantization on the classifier's representations to reconstruct the predictions. The companion website for PIQ is [here](https://piqinter.github.io/). The corresponding training script is `train_piq.py`.
-
-
-- We have three main training scripts. Here's the breakdown, and how to run them:
-
-	* *The training script for PIQ:* This script trains PIQ on a convolutional classifier working on the ESC50 dataset. To run this, you can use the command `python train_piq.py hparams/piq.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`. Companion website with samples can be found [here](https://piqinter.github.io/). 
 
 	* *The training script NMF on ESC50:* This script trains an NMF model on the ESC50 dataset. To run this, you can use the command `python train_nmf.py hparams/nmf.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 	
