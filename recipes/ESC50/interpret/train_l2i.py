@@ -428,18 +428,12 @@ class InterpreterESC50Brain(sb.core.Brain):
         @torch.no_grad()
         def compute_inp_fidelity(wavs, predictions):
             """Computes top-1 input fidelity of interpreter."""
-            X_stft = self.modules.compute_stft(wavs).to(self.device)
-            X_stft_power = sb.processing.features.spectral_magnitude(
-                X_stft, power=self.hparams.spec_mag_power
-            ).transpose(1, 2)
-
-            # TODO: remove after checking results
-            if not self.hparams.use_melspectra:
-                X_stft_power = X_stft_power[..., :417]
-
-            X2 = torch.zeros_like(X_stft_power)
-            for (i, wav) in enumerate(wavs):
-                X2[i] = self.interpret_sample(wav.unsqueeze(0))
+            X2 = self.interpret_sample(wavs[0].unsqueeze(0)).unsqueeze(0)
+            for (i, wav) in enumerate(wavs[1:, ...]):
+                X2 = torch.cat(
+                    (X2, self.interpret_sample(wav.unsqueeze(0)).unsqueeze(0)),
+                    axis=0,
+                )
 
             if self.hparams.use_melspectra:
                 net_input = self.modules.compute_fbank(X2.transpose(1, 2))
@@ -469,18 +463,12 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         @torch.no_grad()
         def compute_faithfulness(wavs, predictions):
-            X_stft = self.modules.compute_stft(wavs).to(self.device)
-            X_stft_power = sb.processing.features.spectral_magnitude(
-                X_stft, power=self.hparams.spec_mag_power
-            ).transpose(1, 2)
-
-            # TODO: remove after checking results
-            if not self.hparams.use_melspectra:
-                X_stft_power = X_stft_power[..., :417]
-
-            X2 = torch.zeros_like(X_stft_power)
-            for (i, wav) in enumerate(wavs):
-                X2[i] = self.interpret_sample(wav.unsqueeze(0))
+            X2 = self.interpret_sample(wavs[0].unsqueeze(0)).unsqueeze(0)
+            for (i, wav) in enumerate(wavs[1:, ...]):
+                X2 = torch.cat(
+                    (X2, self.interpret_sample(wav.unsqueeze(0)).unsqueeze(0)),
+                    axis=0,
+                )
 
             if self.hparams.use_melspectra:
                 net_input = self.modules.compute_fbank(X2.transpose(1, 2))
