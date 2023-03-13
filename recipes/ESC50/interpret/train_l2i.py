@@ -157,11 +157,9 @@ class InterpreterESC50Brain(sb.core.Brain):
             torch.log(X_stft_power + 1).transpose(1, 2).squeeze(0)
         )
 
-        # cem : for the denominator we need to sum over all K, not just the selected ones.
         X_withselected = nmf_dictionary[:, L] @ psi_out[L, :]
         Xhat = nmf_dictionary @ psi_out
 
-        # TODO: fix decoder to avoid needed this
         X_stft_power_log = X_stft_power_log[..., : Xhat.shape[1]]
 
         # need the eps for the denominator
