@@ -6,11 +6,11 @@ This recipe implements the following:
     * *The training script for PIQ:* This script trains PIQ on a convolutional classifier working on the ESC50 dataset. To run this, you can use the command `python train_piq.py hparams/piq.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`. Companion website with samples can be found [here](https://piqinter.github.io/).
 - [Posthoc Interpretability via Quantization]() which makes use of vector quantization on the classifier's representations to reconstruct the predictions. The companion website for PIQ is [here](https://piqinter.github.io/). The corresponding training script is `train_piq.py`.
 
-	* *The training script NMF on ESC50:* This script trains an NMF model on the ESC50 dataset. To run this, you can use the command `python train_nmf.py hparams/nmf.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
+	* *The training script NMF on ESC50:* This script trains an NMF model on the ESC50 dataset. To run this, you can use the command `python train_nmf.py hparams/nmf.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `https://drive.google.com/drive/folders/1cUC5vpZVMuZi6bGhLHduoi6I-tuh4Bwu?usp=share_link`.
 
     * *The training script for L2I interpretation method on convolutional classifier:*: This script trains the L2I method on the ESC50 dataset, interpreting a convolutional model. To run this you can use the command `python train_l2i.py hparams/l2i_conv2dclassifier.yaml --data_folder /yourpath/ESC50`. An example training run can be found in [`https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link`](https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link).
 
-	* *The training script for L2I interpretation method on CNN14:*: This script trains the L2I method on the ESC50 dataset, interpreting a CNN14 model. To run this you can use the command `python train_l2i.py hparams/l2i_cnn14.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
+	* *The training script for L2I interpretation method on CNN14:*: This script trains the L2I method on the ESC50 dataset, interpreting a CNN14 model. To run this you can use the command `python train_l2i.py hparams/l2i_cnn14.yaml --data_folder /yourpath/ESC50`. An example training run can be found in [`https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link`](https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link).
 
 Note that:
     - the recipe automatically downloads the ESC50 dataset. You only need to specify the path to which you would like to download it;
