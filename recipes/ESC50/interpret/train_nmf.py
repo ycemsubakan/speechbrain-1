@@ -59,6 +59,7 @@ class NMFBrain(sb.core.Brain):
             ax[1].imshow(predictions[0, ...].cpu())
 
             plt.savefig("stash/nmf.png")
+            plt.close()
 
         loss = ((target.squeeze() - predictions) ** 2).mean()
         return loss
