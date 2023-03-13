@@ -1,6 +1,6 @@
 # Summary
 
-This recipe implements the following posthoc interpretability techniques. This trainings run on pre-trained models from `recipes/ESC50/classification/` automatically downloaded from HuggingFace Hub. Feel free to train your own classifier with the instruction in the reference README.
+This recipe implements the following posthoc interpretability techniques. This trainings run on pre-trained models from `recipes/ESC50/classification/` automatically downloaded from HuggingFace Hub. If needed, you can train your own classifier with the instruction in the reference README.
 
 - [Posthoc Interpretability via Quantization]() which makes use of vector quantization on the classifier's representations to reconstruct the predictions. The companion website for PIQ is [here](https://piqinter.github.io/). The corresponding training script is `train_piq.py`.
     * *The training script for PIQ:* This script trains PIQ on a convolutional classifier working on the ESC50 dataset. To run this, you can use the command `python train_piq.py hparams/piq.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`. Companion website with samples can be found [here](https://piqinter.github.io/).
