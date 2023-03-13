@@ -17,7 +17,6 @@ from hyperpyyaml import load_hyperpyyaml
 from speechbrain.utils.distributed import run_on_main
 from esc50_prepare import prepare_esc50
 from train_l2i import dataio_prep
-import matplotlib.pyplot as plt
 
 
 class NMFBrain(sb.core.Brain):
@@ -52,14 +51,6 @@ class NMFBrain(sb.core.Brain):
         X_stft = self.hparams.compute_stft(wavs)
         X_stft_power = self.hparams.compute_stft_mag(X_stft)
         target = torch.log1p(X_stft_power).permute(0, 2, 1)
-
-        if stage == sb.Stage.VALID:
-            fig, ax = plt.subplots(1, 2, sharex=True)
-            ax[0].imshow(target[0, ...].cpu())
-            ax[1].imshow(predictions[0, ...].cpu())
-
-            plt.savefig("stash/nmf.png")
-            plt.close()
 
         loss = ((target.squeeze() - predictions) ** 2).mean()
         return loss

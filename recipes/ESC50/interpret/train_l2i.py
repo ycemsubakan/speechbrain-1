@@ -11,7 +11,6 @@ from speechbrain.utils.metric_stats import MetricStats
 from os import makedirs
 import torch.nn.functional as F
 from speechbrain.processing.NMF import spectral_phase
-import matplotlib.pyplot as plt
 
 eps = 1e-10
 
@@ -135,7 +134,6 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         predictions = self.hparams.classifier(embeddings).squeeze(1)
         pred_cl = torch.argmax(predictions, dim=1)[0].item()
-        # print(pred_cl)
 
         nmf_dictionary = self.hparams.nmf_decoder.return_W()
 
@@ -168,7 +166,6 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         # need the eps for the denominator
         eps = 1e-10
-        # X_int = (X_ks / (sum_X_k.unsqueeze(0)+eps)).sum(0) * X_stft_power_log
         X_int = (X_withselected / (Xhat + eps)) * X_stft_power_log
 
         # get back to the standard stft
@@ -255,6 +252,7 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         temp = X_int.transpose(0, 1).unsqueeze(0).unsqueeze(-1)
 
+        X_stft_phase_sb = X_stft_phase_sb[:, : temp.shape[1], :, :]
         X_wpsb = temp * X_stft_phase_sb
         x_int_sb = self.modules.compute_istft(X_wpsb)
 
@@ -353,15 +351,9 @@ class InterpreterESC50Brain(sb.core.Brain):
                 % self.hparams.interpret_period
             ) == 0 and self.hparams.save_interpretations:
                 wavs = wavs[0].unsqueeze(0)
-                fig, ax = plt.subplots(1, 2, sharex=True)
-                ax[0].imshow(net_input[0, ...].cpu())
-                ax[1].imshow(reconstructed[0, ...].cpu())
-
-                plt.savefig("stash/l2i_rec.png")
-                plt.close()
 
                 self.interpret_sample(wavs, batch)
-                # self.overlap_test(batch)
+                self.overlap_test(batch)
 
         return (reconstructed, psi_out), (predictions, theta_out)
 
@@ -396,7 +388,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_stft_logpower = X_stft_logpower[:, : reconstructions.shape[1], :]
 
         loss_nmf = ((reconstructions - X_stft_logpower) ** 2).mean()
-        # loss_nmf = loss_nmf / reconstructions.shape[0]  # avg on batches
         loss_nmf = self.hparams.alpha * loss_nmf
         loss_nmf += self.hparams.beta * (time_activations).abs().mean()
 
@@ -409,15 +400,12 @@ class InterpreterESC50Brain(sb.core.Brain):
 
         theta_out = -torch.log(theta_out)
         loss_fdi = (F.softmax(classification_out, dim=1) * theta_out).mean()
-        # theta_out = F.softmax(theta_out, dim=1).log()
-        # loss_fdi = (-F.softmax(classification_out, dim=1) * theta_out).mean()
 
         return loss_nmf + loss_fdi
 
     def on_stage_start(self, stage, epoch=None):
         def accuracy_value(predict, target, length):
             """Computes Accuracy"""
-            # predict = predict.argmax(1, keepdim=True)
             nbr_correct, nbr_total = sb.utils.Accuracy.Accuracy(
                 predict.unsqueeze(1), target, length
             )
@@ -428,7 +416,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         def compute_fidelity(theta_out, predictions):
             """Computes top-`k` fidelity of interpreter."""
             predictions = F.softmax(predictions, dim=1)
-            # theta_out = F.softmax(theta_out, dim=1)
 
             pred_cl = torch.argmax(predictions, dim=1)
             k_top = torch.topk(theta_out, k=self.hparams.k_fidelity, dim=1)[1]

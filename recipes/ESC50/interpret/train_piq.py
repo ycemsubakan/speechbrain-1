@@ -29,7 +29,10 @@ class InterpreterESC50Brain(sb.core.Brain):
             dim=-1,
         )
 
-        X_wpsb = X_int * X_stft_phase_sb[:, : X_int.shape[1], :, :]
+        X_stft_phase_sb = X_stft_phase_sb[:, : X_int.shape[1], :, :]
+        if X_int.ndim == 3:
+            X_int = X_int.unsqueeze(-1)
+        X_wpsb = X_int * X_stft_phase_sb
         x_int_sb = self.modules.compute_istft(X_wpsb)
 
         return x_int_sb
@@ -68,8 +71,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         if self.hparams.use_vq:
             xhat, hcat, _ = self.modules.psi(hcat, class_pred)
         else:
-            # xhat, hcat = self.modules.psi(f_I, class_pred)
-            # hcat = self.modules.psi.encoder(X_stft_logpower.unsqueeze(1))
             xhat = self.modules.psi.decoder(hcat)
         xhat = xhat.squeeze(1)
 
@@ -91,6 +92,7 @@ class InterpreterESC50Brain(sb.core.Brain):
         X_int, X_stft_phase, pred_cl, _, _ = self.interpret_computation_steps(
             wavs
         )
+        X_stft_phase = X_stft_phase[:, : X_int.shape[1], :]
         if not (batch is None):
             x_int_sb = self.invert_stft_with_phase(X_int, X_stft_phase)
 
@@ -106,14 +108,16 @@ class InterpreterESC50Brain(sb.core.Brain):
             current_class_name = self.hparams.label_encoder.ind2lab[
                 current_class_ind
             ]
-            predicted_class_name = self.hparams.label_encoder.ind2lab[pred_cl]
+            predicted_class_name = self.hparams.label_encoder.ind2lab[
+                pred_cl.item()
+            ]
             torchaudio.save(
                 os.path.join(
                     self.hparams.output_folder,
                     "audios_from_interpretation",
                     f"original_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
-                wavs[0].unsqueeze(0),
+                wavs[0].unsqueeze(0).cpu(),
                 self.hparams.sample_rate,
             )
 
@@ -123,7 +127,7 @@ class InterpreterESC50Brain(sb.core.Brain):
                     "audios_from_interpretation",
                     f"interpretation_tc_{current_class_name}_pc_{predicted_class_name}.wav",
                 ),
-                x_int_sb,
+                x_int_sb.cpu(),
                 self.hparams.sample_rate,
             )
 
@@ -160,7 +164,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         x_int_sb = self.invert_stft_with_phase(temp, X_stft_phase)
 
         # save reconstructed and original spectrograms
-        # epoch = self.hparams.epoch_counter.current
         current_class_ind = batch.class_string_encoded.data[0].item()
         current_class_name = self.hparams.label_encoder.ind2lab[
             current_class_ind
@@ -248,7 +251,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         plt.colorbar()
 
         plt.subplot(142)
-        # input_masked = (X_target > (X_target.max() * self.hparams.mask_th)).float()
         input_masked = X_target > (
             X_target.max(keepdim=True, dim=-1)[0].max(keepdim=True, dim=-2)[0]
             * self.hparams.mask_th
@@ -320,8 +322,6 @@ class InterpreterESC50Brain(sb.core.Brain):
         if self.hparams.use_vq:
             xhat, hcat, z_q_x = self.modules.psi(hcat, class_pred)
         else:
-            # xhat, hcat = self.modules.psi(f_I, class_pred)
-            # hcat = self.modules.psi.encoder(X_stft_logpower.unsqueeze(1))
             xhat = self.modules.psi.decoder(hcat)
 
             z_q_x = None
@@ -340,8 +340,8 @@ class InterpreterESC50Brain(sb.core.Brain):
                 self.hparams.epoch_counter.current
                 % self.hparams.interpret_period
             ) == 0 and self.hparams.save_interpretations:
-                # wavs = wavs[0].unsqueeze(0)
-                # self.interpret_sample(wavs, batch)
+                wavs = wavs[0].unsqueeze(0)
+                self.interpret_sample(wavs, batch)
                 self.overlap_test(batch)
                 self.debug_files(X_stft, xhat, X_stft_logpower, batch, wavs)
 
@@ -732,36 +732,14 @@ if __name__ == "__main__":
     else:
         # Load the best checkpoint for evaluation
 
+        Interpreter_brain.checkpointer.recover_if_possible(
+            max_key="valid_top-3_fid",
+            device=torch.device(Interpreter_brain.device),
+        )
+
         test_stats = Interpreter_brain.evaluate(
             test_set=datasets["test"],
             min_key="loss",
             progressbar=True,
             test_loader_kwargs=hparams["dataloader_options"],
         )
-        import pdb
-
-        pdb.set_trace()
-
-        Interpreter_brain.checkpointer.recover_if_possible(
-            max_key="valid_top-3_fid",
-            device=torch.device(Interpreter_brain.device),
-        )
-
-        for i, filename in enumerate(
-            [
-                "original_157_229.wav",
-                "original_157_300.wav",
-                "original_199_178.wav",
-                "original_300_157.wav",
-            ]
-        ):
-            # 'original_237.wav', 'original_178.wav', 'original_229.wav']):
-            print(filename)
-            data, read_sr = torchaudio.load(f"l2i_mixtures/{filename}")
-            resampler = torchaudio.transforms.Resample(
-                orig_freq=read_sr, new_freq=hparams["sample_rate"]
-            )
-            # Resample audio
-            data = resampler.forward(data).to(Interpreter_brain.device)
-
-            Interpreter_brain.interpret_sample(data, f"mix_{i}.wav")
