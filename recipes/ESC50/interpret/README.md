@@ -8,7 +8,7 @@ This recipe implements the following:
 
 	* *The training script NMF on ESC50:* This script trains an NMF model on the ESC50 dataset. To run this, you can use the command `python train_nmf.py hparams/nmf.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 	
-    * *The training script for L2I interpretation method on convolutional classifier:*: This script trains the L2I method on the ESC50 dataset, interpreting a convolutional model. To run this you can use the command `python train_l2i.py hparams/l2i_conv2dclassifier.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
+    * *The training script for L2I interpretation method on convolutional classifier:*: This script trains the L2I method on the ESC50 dataset, interpreting a convolutional model. To run this you can use the command `python train_l2i.py hparams/l2i_conv2dclassifier.yaml --data_folder /yourpath/ESC50`. An example training run can be found in [`https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link`](https://drive.google.com/drive/folders/1059ghU9MZOUx9cZ5velwkefD8MDsO1AK?usp=share_link).
     
 	* *The training script for L2I interpretation method on CNN14:*: This script trains the L2I method on the ESC50 dataset, interpreting a CNN14 model. To run this you can use the command `python train_l2i.py hparams/l2i_cnn14.yaml --data_folder /yourpath/ESC50`. An example training run can be found in `update link`.
 
