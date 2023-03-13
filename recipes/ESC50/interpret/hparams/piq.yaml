@@ -61,11 +61,6 @@ normalize: True
 # Number of classes
 out_n_neurons: 50
 
-# Note that it's actually important to shuffle the data here
-# (or at the very least, not sort the data by duration)
-# Also note that this does not violate the UrbanSound8k "no-shuffle" policy
-# because this does not mix samples from folds in train to valid/test, only
-# within train or valid, or test
 shuffle: True
 dataloader_options:
     batch_size: !ref <batch_size>

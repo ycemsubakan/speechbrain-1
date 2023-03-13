@@ -49,10 +49,6 @@ sample_rate: 44100
 
 device: "cpu"
 
-# Feature parameters
-
-# Number of classes
-
 shuffle: True
 dataloader_options:
     batch_size: !ref <batch_size>
