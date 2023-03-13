@@ -11,7 +11,6 @@ audio_data_folder: !ref <data_folder>/audio
 # TODO the follwing folder will contain the resampled audio
 # files (mono channel and config SR) to train on
 #reasmpled_audio_data_folder: !ref <data_folder>/audio_mono16kHz
-#
 experiment_name: conv2dv2_classifier-16k
 output_folder: !ref ./results/<experiment_name>/<seed>
 save_folder: !ref <output_folder>/save
@@ -92,48 +91,6 @@ augment_speed: !new:speechbrain.lobes.augment.TimeDomainSpecAugment
     sample_rate: !ref <sample_rate>
     speeds: [95, 100, 105]
 
-    #add_rev: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 1.0
-    #    noise_prob: 0.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-    #
-    #add_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 0.0
-    #    noise_prob: 1.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-    #
-    #add_rev_noise: !new:speechbrain.lobes.augment.EnvCorrupt
-    #    openrir_folder: !ref <open_rir_folder>
-    #    openrir_max_noise_len: 3.0  # seconds
-    #    reverb_prob: 1.0
-    #    noise_prob: 1.0
-    #    noise_snr_low: 0
-    #    noise_snr_high: 15
-    #    rir_scale_factor: 1.0
-
-
-# Definition of the augmentation pipeline.
-# If concat_augment = False, the augmentation techniques are applied
-# in sequence. If concat_augment = True, all the augmented signals
-# # are concatenated in a single big batch.
-
-augment_pipeline: [
-    #!ref <augment_wavedrop>,
-    #!ref <augment_speed>,
-    #!ref <add_rev>,
-    #!ref <add_noise>,
-    #!ref <add_rev_noise>
-]
-concat_augment: True
-
 mean_var_norm: !new:speechbrain.processing.features.InputNormalization
     norm_type: sentence
     std_norm: False
@@ -157,11 +114,6 @@ compute_fbank: !new:speechbrain.processing.features.Filterbank
 modules:
     compute_stft: !ref <compute_stft>
     compute_fbank: !ref <compute_fbank>
-    #augment_wavedrop: !ref <augment_wavedrop>
-    #augment_speed: !ref <augment_speed>
-    #add_rev: !ref <add_rev>
-    #add_noise: !ref <add_noise>
-    #add_rev_noise: !ref <add_rev_noise>
     embedding_model: !ref <embedding_model>
     classifier: !ref <classifier>
     mean_var_norm: !ref <mean_var_norm>
@@ -170,8 +122,6 @@ compute_cost: !new:speechbrain.nnet.losses.LogSoftmaxWrapper
     loss_fn: !new:speechbrain.nnet.losses.AdditiveAngularMargin
         margin: 0.2
         scale: 30
-
-# compute_error: !name:speechbrain.nnet.losses.classification_error
 
 opt_class: !name:torch.optim.Adam
     lr: !ref <lr>
