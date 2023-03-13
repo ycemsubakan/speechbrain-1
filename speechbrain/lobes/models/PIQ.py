@@ -525,15 +525,16 @@ class VQEmbedding(nn.Module):
         `True` if latent space should be quantized for different classes.
     shared_keys : int
         Number of shared keys among classes.
+
     """
 
     def __init__(
         self,
         K,
         D,
-        numclasses=10,
+        numclasses=50,
         activate_class_partitioning=True,
-        shared_keys=10,
+        shared_keys=0,
     ):
         super().__init__()
         self.embedding = nn.Embedding(K, D)
@@ -544,14 +545,58 @@ class VQEmbedding(nn.Module):
         self.activate_class_partitioning = activate_class_partitioning
         self.shared_keys = shared_keys
 
-    def forward(self, z_e_x):
+    def forward(self, z_e_x, labels=None):
+        """
+        Wraps VectorQuantization. Computes VQ-dictionary indices for input quantization. Note that this forward step is not differentiable.
+
+        Arguments
+        ---------
+        z_e_x : torch.Tensor
+            Input tensor to be quantized.
+
+        Returns
+        --------
+        Codebook's indices for quantized representation : torch.Tensor
+
+        Example:
+        --------
+        >>> inputs = torch.ones(3, 256, 14, 25)
+        >>> codebook = VQEmbedding(1024, 256)
+        >>> labels = torch.Tensor([1, 0, 2])
+        >>> print(codebook(inputs, labels).shape)
+        torch.Size([3, 14, 25])
+        """
         z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
         latents = VectorQuantization.apply(
-            z_e_x_, self.embedding.weight, training=self.training
+            z_e_x_, self.embedding.weight, labels
         )
         return latents
 
     def straight_through(self, z_e_x, labels=None):
+        """
+        Implements the vector quantization with straight through approximation of the gradient.
+
+        Arguments
+        ---------
+        z_e_x : torch.Tensor
+            Input tensor to be quantized.
+        labels : torch.Tensor
+            Predicted class for input representations (used for latent space quantization).
+
+        Returns
+        --------
+        Straigth through quantized representation and quantized representation : tuple
+
+        Example:
+        --------
+        >>> inputs = torch.ones(3, 256, 14, 25)
+        >>> codebook = VQEmbedding(1024, 256)
+        >>> labels = torch.Tensor([1, 0, 2])
+        >>> quant, quant_ind = codebook.straight_through(inputs, labels)
+        >>> print(quant.shape, quant_ind.shape)
+        torch.Size([3, 256, 14, 25]) torch.Size([3, 256, 14, 25])
+
+        """
         z_e_x_ = z_e_x.permute(0, 2, 3, 1).contiguous()
         z_q_x_, indices = VectorQuantizationStraightThrough.apply(
             z_e_x_,
